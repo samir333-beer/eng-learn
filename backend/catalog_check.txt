@@ -1,0 +1,5 @@
+TOTAL=285
+UNIQUE_IDS=285
+DUP_IDS=[]
+DUP_EN=['nice to meet you']
+BY_LEVEL={'A1': 77, 'A2': 63, 'B1': 80, 'B2': 65}

@@ -1,0 +1,2196 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+# File Summary
+
+## Purpose
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+
+## File Format
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  a. A header with the file path (## File: path/to/file)
+  b. The full contents of the file in a code block
+
+## Usage Guidelines
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+
+## Notes
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+
+# Directory Structure
+```
+api/
+  routes/
+    __init__.py
+    auth.py
+    leaderboard.py
+    phrases.py
+    progress.py
+    quiz.py
+    srs.py
+  deps.py
+core/
+  codes.py
+  config.py
+  security.py
+data/
+  phrases/
+    catalog.py
+    level_a1.py
+    level_a2.py
+    level_b1.py
+    level_b2.py
+db/
+  base.py
+  init_db.py
+  session.py
+models/
+  email_code.py
+  progress.py
+  srs_card.py
+  user.py
+schemas/
+  auth.py
+  leaderboard.py
+  phrase.py
+  quiz.py
+  srs.py
+  stats.py
+services/
+  auth_service.py
+  email_service.py
+  leaderboard_service.py
+  phrase_service.py
+  quiz_service.py
+  srs_service.py
+  stats_service.py
+tests/
+  test_srs.py
+.env.example
+catalog_check.txt
+docker-compose.yml
+Dockerfile
+english_app.db
+main.py
+main.zip
+requirements.txt
+```
+
+# Files
+
+## File: api/routes/__init__.py
+```python
+# API route modules
+```
+
+## File: api/routes/auth.py
+```python
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from sqlalchemy.orm import Session
+
+from api.deps import get_current_user
+from core.security import create_access_token
+from db.session import get_db
+from models.user import User
+from schemas.auth import (
+    EmailLoginCodeRequest,
+    EmailPasswordLogin,
+    EmailRegisterRequest,
+    MessageResponse,
+    SendCodeRequest,
+    TokenResponse,
+    UserResponse,
+)
+from services.auth_service import (
+    authenticate_email_password,
+    create_user_with_email,
+    get_user_by_email,
+    get_user_by_username,
+    send_email_code,
+    verify_email_code,
+)
+from services.stats_service import touch_user_active
+
+limiter = Limiter(key_func=get_remote_address)
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+@router.post("/email/send-code", response_model=MessageResponse)
+@limiter.limit("5/minute")
+def send_code(request: Request, data: SendCodeRequest, db: Session = Depends(get_db)):
+    email = data.email
+    if data.purpose == "register":
+        if get_user_by_email(db, email):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Эта почта уже используется",
+            )
+    elif data.purpose == "login":
+        if not get_user_by_email(db, email):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Пользователь с такой почтой не найден",
+            )
+    send_email_code(db, email, data.purpose)
+    return MessageResponse(message="Код отправлен на почту")
+
+
+@router.post("/email/register", response_model=TokenResponse)
+@limiter.limit("10/minute")
+def register_email(
+    request: Request, data: EmailRegisterRequest, db: Session = Depends(get_db)
+):
+    if get_user_by_email(db, data.email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Эта почта уже используется",
+        )
+    if get_user_by_username(db, data.username):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Имя пользователя уже занято",
+        )
+    if not verify_email_code(db, data.email, data.code, "register"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Неверный или просроченный код",
+        )
+    user = create_user_with_email(
+        db, data.email, data.username, data.password
+    )
+    token = create_access_token(str(user.id))
+    return TokenResponse(access_token=token)
+
+
+@router.post("/email/login-code", response_model=TokenResponse)
+@limiter.limit("15/minute")
+def login_with_code(
+    request: Request, data: EmailLoginCodeRequest, db: Session = Depends(get_db)
+):
+    user = get_user_by_email(db, data.email)
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    if not verify_email_code(db, data.email, data.code, "login"):
+        raise HTTPException(
+            status_code=400, detail="Неверный или просроченный код"
+        )
+    touch_user_active(db, user)
+    return TokenResponse(access_token=create_access_token(str(user.id)))
+
+
+@router.post("/login", response_model=TokenResponse)
+@limiter.limit("20/minute")
+def login_password(
+    request: Request, data: EmailPasswordLogin, db: Session = Depends(get_db)
+):
+    user = authenticate_email_password(db, data.email, data.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Неверная почта или пароль",
+        )
+    touch_user_active(db, user)
+    return TokenResponse(access_token=create_access_token(str(user.id)))
+
+
+@router.get("/me", response_model=UserResponse)
+def me(current_user: User = Depends(get_current_user)):
+    return current_user
+```
+
+## File: api/routes/leaderboard.py
+```python
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from api.deps import get_current_user
+from db.session import get_db
+from models.user import User
+from schemas.leaderboard import LeaderboardResponse, StudyTimeRequest
+from services.leaderboard_service import (
+    add_study_time,
+    get_time_leaderboard,
+    get_words_leaderboard,
+)
+from services.stats_service import touch_user_active
+
+router = APIRouter(prefix="/leaderboard", tags=["leaderboard"])
+
+
+@router.get("/words", response_model=LeaderboardResponse)
+def leaderboard_words(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return get_words_leaderboard(db, user.id)
+
+
+@router.get("/time", response_model=LeaderboardResponse)
+def leaderboard_time(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return get_time_leaderboard(db, user.id)
+
+
+@router.post("/study-time")
+def log_study_time(
+    data: StudyTimeRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    total = add_study_time(db, user, data.seconds)
+    touch_user_active(db, user)
+    return {"ok": True, "study_time_seconds": total}
+```
+
+## File: api/routes/phrases.py
+```python
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+
+from api.deps import get_current_user
+from data.phrases.catalog import LEVELS
+from db.session import get_db
+from models.user import User
+from schemas.phrase import PhraseListResponse, PhraseResponse
+from services.phrase_service import get_phrase_by_id, get_phrases_page, get_random_phrase
+from services.stats_service import record_view
+
+router = APIRouter(prefix="/phrases", tags=["phrases"])
+
+
+@router.get("/levels")
+def list_levels(_: User = Depends(get_current_user)):
+    return {"levels": list(LEVELS)}
+
+
+@router.get("/random", response_model=PhraseResponse)
+def random_phrase(
+    level: str | None = Query(default=None),
+    topic: str | None = Query(default=None),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    phrase = get_random_phrase(level, topic)
+    record_view(db, user.id, phrase.id)
+    return phrase
+
+
+@router.get("/", response_model=PhraseListResponse)
+def list_phrases(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=50),
+    level: str | None = Query(default=None),
+    topic: str | None = Query(default=None),
+    _: User = Depends(get_current_user),
+):
+    items, total = get_phrases_page(skip, limit, level, topic)
+    return PhraseListResponse(items=items, total=total, skip=skip, limit=limit)
+
+
+@router.get("/{phrase_id}", response_model=PhraseResponse)
+def get_phrase(phrase_id: int, _: User = Depends(get_current_user)):
+    phrase = get_phrase_by_id(phrase_id)
+    if not phrase:
+        raise HTTPException(status_code=404, detail="Фраза не найдена")
+    return phrase
+```
+
+## File: api/routes/progress.py
+```python
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from api.deps import get_current_user
+from data.phrases.catalog import PHRASE_BY_ID
+from db.session import get_db
+from models.user import User
+from schemas.stats import ProgressRequest, StatsResponse
+from services.stats_service import get_user_stats, mark_learned, record_view
+
+router = APIRouter(prefix="/progress", tags=["progress"])
+
+
+@router.get("/stats", response_model=StatsResponse)
+def my_stats(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return get_user_stats(db, user.id)
+
+
+@router.post("/view")
+def log_view(
+    data: ProgressRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if data.phrase_id not in PHRASE_BY_ID:
+        raise HTTPException(status_code=404, detail="Фраза не найдена")
+    record_view(db, user.id, data.phrase_id)
+    return {"ok": True}
+
+
+@router.post("/learned")
+def log_learned(
+    data: ProgressRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if data.phrase_id not in PHRASE_BY_ID:
+        raise HTTPException(status_code=404, detail="Фраза не найдена")
+    mark_learned(db, user.id, data.phrase_id)
+    return {"ok": True}
+```
+
+## File: api/routes/quiz.py
+```python
+from fastapi import APIRouter, Depends, Query
+
+from api.deps import get_current_user
+from models.user import User
+from schemas.quiz import QuizResponse
+from services.quiz_service import get_quiz
+
+router = APIRouter(prefix="/quiz", tags=["quiz"])
+
+
+@router.get("/", response_model=QuizResponse)
+def quiz(
+    level: str | None = Query(default=None),
+    count: int = Query(default=10, ge=1, le=20),
+    _: User = Depends(get_current_user),
+):
+    return get_quiz(level=level, count=count)
+```
+
+## File: api/routes/srs.py
+```python
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from api.deps import get_current_user
+from db.session import get_db
+from models.user import User
+from schemas.srs import (
+    SRSReviewRequest,
+    SRSReviewResponse,
+    SRSReviewResult,
+    SRSStatsResponse,
+)
+from services.srs_service import (
+    get_review_session,
+    get_srs_stats,
+    review_card,
+)
+
+router = APIRouter(prefix="/srs", tags=["srs"])
+
+
+@router.get("/review", response_model=SRSReviewResponse)
+def review_session(
+    limit: int = 20,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return get_review_session(db, user.id, limit=limit)
+
+
+@router.post("/review", response_model=SRSReviewResult)
+def submit_review(
+    data: SRSReviewRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if data.quality not in (0, 1):
+        raise HTTPException(status_code=400, detail="quality должен быть 0 или 1")
+    try:
+        return review_card(db, user.id, data.card_id, data.quality)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/stats", response_model=SRSStatsResponse)
+def srs_stats(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return get_srs_stats(db, user.id)
+```
+
+## File: api/deps.py
+```python
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.orm import Session
+
+from core.security import decode_access_token
+from db.session import get_db
+from models.user import User
+from services.auth_service import get_user_by_id
+
+security = HTTPBearer()
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+) -> User:
+    sub = decode_access_token(credentials.credentials)
+    if not sub:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Недействительный токен",
+        )
+    try:
+        user_id = int(sub)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Недействительный токен",
+        )
+    user = get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Пользователь не найден",
+        )
+    return user
+```
+
+## File: core/codes.py
+```python
+import hashlib
+import secrets
+
+
+def generate_code() -> str:
+    return f"{secrets.randbelow(1_000_000):06d}"
+
+
+def hash_code(code: str) -> str:
+    return hashlib.sha256(code.strip().encode()).hexdigest()
+
+
+def verify_code(plain: str, hashed: str) -> bool:
+    return hash_code(plain) == hashed
+```
+
+## File: core/config.py
+```python
+import os
+from functools import lru_cache
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+DEFAULT_SECRET = "change-me-in-production-use-long-random-string"
+
+
+@lru_cache
+def get_settings():
+    return Settings()
+
+
+class Settings:
+    def __init__(self) -> None:
+        self.database_url: str = os.getenv(
+            "DATABASE_URL", "sqlite:///./english_app.db"
+        )
+        self.secret_key: str = os.getenv("SECRET_KEY", DEFAULT_SECRET)
+        self.access_token_expire_minutes: int = int(
+            os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "10080")
+        )
+        self.algorithm: str = "HS256"
+        self.code_expire_minutes: int = int(os.getenv("CODE_EXPIRE_MINUTES", "10"))
+        self.smtp_host: str = os.getenv("SMTP_HOST", "")
+        self.smtp_port: int = int(os.getenv("SMTP_PORT", "587"))
+        self.smtp_user: str = os.getenv("SMTP_USER", "")
+        self.smtp_password: str = os.getenv("SMTP_PASSWORD", "")
+        self.smtp_from: str = os.getenv("SMTP_FROM", "noreply@englishapp.local")
+        self.app_env: str = os.getenv("APP_ENV", "development")
+        self.cors_origins: list[str] = [
+            o.strip()
+            for o in os.getenv(
+                "CORS_ORIGINS",
+                "http://localhost:8081,http://localhost:19006,exp://localhost:8081",
+            ).split(",")
+            if o.strip()
+        ]
+
+        if self.app_env == "production" and self.secret_key == DEFAULT_SECRET:
+            raise RuntimeError(
+                "SECRET_KEY не задан! Установите надёжный SECRET_KEY в .env для production."
+            )
+```
+
+## File: core/security.py
+```python
+from datetime import datetime, timedelta, timezone
+
+import bcrypt
+from jose import JWTError, jwt
+
+from core.config import get_settings
+
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def verify_password(plain: str, hashed: str) -> bool:
+    return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+
+
+def create_access_token(subject: str) -> str:
+    settings = get_settings()
+    expire = datetime.now(timezone.utc) + timedelta(
+        minutes=settings.access_token_expire_minutes
+    )
+    payload = {"sub": subject, "exp": expire}
+    return jwt.encode(
+        payload, settings.secret_key, algorithm=settings.algorithm
+    )
+
+
+def decode_access_token(token: str) -> str | None:
+    settings = get_settings()
+    try:
+        payload = jwt.decode(
+            token, settings.secret_key, algorithms=[settings.algorithm]
+        )
+        sub = payload.get("sub")
+        return str(sub) if sub else None
+    except JWTError:
+        return None
+```
+
+## File: data/phrases/catalog.py
+```python
+from data.phrases.level_a1 import PHRASES_A1
+from data.phrases.level_a2 import PHRASES_A2
+from data.phrases.level_b1 import PHRASES_B1
+from data.phrases.level_b2 import PHRASES_B2
+
+PHRASES: list[dict] = PHRASES_A1 + PHRASES_A2 + PHRASES_B1 + PHRASES_B2
+PHRASE_BY_ID: dict[int, dict] = {p["id"]: p for p in PHRASES}
+LEVELS = ("A1", "A2", "B1", "B2")
+TOTAL_PHRASES = len(PHRASES)
+```
+
+## File: data/phrases/level_a1.py
+```python
+PHRASES_A1 = [
+    {"id": 1, "en": "Hello", "ru": "Привет", "topic": "greetings", "level": "A1"},
+    {"id": 2, "en": "Good morning", "ru": "Доброе утро", "topic": "greetings", "level": "A1"},
+    {"id": 3, "en": "Thank you", "ru": "Спасибо", "topic": "greetings", "level": "A1"},
+    {"id": 4, "en": "Please", "ru": "Пожалуйста", "topic": "greetings", "level": "A1"},
+    {"id": 5, "en": "Yes", "ru": "Да", "topic": "basics", "level": "A1"},
+    {"id": 6, "en": "No", "ru": "Нет", "topic": "basics", "level": "A1"},
+    {"id": 7, "en": "Water", "ru": "Вода", "topic": "food", "level": "A1"},
+    {"id": 8, "en": "Food", "ru": "Еда", "topic": "food", "level": "A1"},
+    {"id": 9, "en": "I am fine", "ru": "У меня всё хорошо", "topic": "conversation", "level": "A1"},
+    {"id": 10, "en": "My name is Anna", "ru": "Меня зовут Анна", "topic": "conversation", "level": "A1"},
+    {"id": 11, "en": "How are you?", "ru": "Как дела?", "topic": "conversation", "level": "A1"},
+    {"id": 12, "en": "Goodbye", "ru": "До свидания", "topic": "greetings", "level": "A1"},
+    {"id": 13, "en": "One", "ru": "Один", "topic": "numbers", "level": "A1"},
+    {"id": 14, "en": "Two", "ru": "Два", "topic": "numbers", "level": "A1"},
+    {"id": 15, "en": "Three", "ru": "Три", "topic": "numbers", "level": "A1"},
+    {"id": 16, "en": "Today", "ru": "Сегодня", "topic": "time", "level": "A1"},
+    {"id": 17, "en": "Tomorrow", "ru": "Завтра", "topic": "time", "level": "A1"},
+    {"id": 18, "en": "Here", "ru": "Здесь", "topic": "basics", "level": "A1"},
+    {"id": 19, "en": "There", "ru": "Там", "topic": "basics", "level": "A1"},
+    {"id": 20, "en": "Big", "ru": "Большой", "topic": "basics", "level": "A1"},
+    {"id": 21, "en": "Small", "ru": "Маленький", "topic": "basics", "level": "A1"},
+    {"id": 22, "en": "I like coffee", "ru": "Мне нравится кофе", "topic": "food", "level": "A1"},
+    {"id": 23, "en": "Where is the toilet?", "ru": "Где туалет?", "topic": "travel", "level": "A1"},
+    {"id": 24, "en": "Help", "ru": "Помогите", "topic": "travel", "level": "A1"},
+    {"id": 25, "en": "I don't understand", "ru": "Я не понимаю", "topic": "learning", "level": "A1"},
+    {"id": 101, "en": "Friend", "ru": "Друг", "topic": "people", "level": "A1"},
+    {"id": 102, "en": "Family", "ru": "Семья", "topic": "people", "level": "A1"},
+    {"id": 103, "en": "House", "ru": "Дом", "topic": "home", "level": "A1"},
+    {"id": 104, "en": "School", "ru": "Школа", "topic": "education", "level": "A1"},
+    {"id": 105, "en": "Cat", "ru": "Кошка", "topic": "animals", "level": "A1"},
+    {"id": 106, "en": "Dog", "ru": "Собака", "topic": "animals", "level": "A1"},
+    {"id": 107, "en": "Red", "ru": "Красный", "topic": "colors", "level": "A1"},
+    {"id": 108, "en": "Blue", "ru": "Синий", "topic": "colors", "level": "A1"},
+    {"id": 109, "en": "Open the door", "ru": "Открой дверь", "topic": "home", "level": "A1"},
+    {"id": 110, "en": "Close the window", "ru": "Закрой окно", "topic": "home", "level": "A1"},
+    {"id": 111, "en": "I am hungry", "ru": "Я голоден", "topic": "food", "level": "A1"},
+    {"id": 112, "en": "I am thirsty", "ru": "Я хочу пить", "topic": "food", "level": "A1"},
+    {"id": 113, "en": "Nice to meet you", "ru": "Приятно познакомиться", "topic": "greetings", "level": "A1"},
+    {"id": 114, "en": "See you later", "ru": "Увидимся позже", "topic": "greetings", "level": "A1"},
+    {"id": 115, "en": "What time is it?", "ru": "Который час?", "topic": "time", "level": "A1"},
+    {"id": 161, "en": "Good evening", "ru": "Добрый вечер", "topic": "greetings", "level": "A1"},
+    {"id": 162, "en": "Excuse me", "ru": "Извините", "topic": "greetings", "level": "A1"},
+    {"id": 163, "en": "I am sorry", "ru": "Мне жаль", "topic": "greetings", "level": "A1"},
+    {"id": 164, "en": "What is your name?", "ru": "Как тебя зовут?", "topic": "conversation", "level": "A1"},
+    {"id": 165, "en": "Where are you from?", "ru": "Откуда ты?", "topic": "conversation", "level": "A1"},
+    {"id": 166, "en": "I am from Russia", "ru": "Я из России", "topic": "conversation", "level": "A1"},
+    {"id": 167, "en": "How old are you?", "ru": "Сколько тебе лет?", "topic": "conversation", "level": "A1"},
+    {"id": 168, "en": "I am twenty years old", "ru": "Мне двадцать лет", "topic": "conversation", "level": "A1"},
+    {"id": 169, "en": "Do you speak English?", "ru": "Ты говоришь по-английски?", "topic": "conversation", "level": "A1"},
+    {"id": 170, "en": "I speak a little English", "ru": "Я немного говорю по-английски", "topic": "conversation", "level": "A1"},
+    {"id": 171, "en": "I don't know", "ru": "Я не знаю", "topic": "basics", "level": "A1"},
+    {"id": 172, "en": "I understand", "ru": "Я понимаю", "topic": "basics", "level": "A1"},
+    {"id": 173, "en": "Can you help me?", "ru": "Ты можешь мне помочь?", "topic": "basics", "level": "A1"},
+    {"id": 174, "en": "I need help", "ru": "Мне нужна помощь", "topic": "basics", "level": "A1"},
+    {"id": 175, "en": "What is this?", "ru": "Что это?", "topic": "basics", "level": "A1"},
+    {"id": 176, "en": "This is a book", "ru": "Это книга", "topic": "basics", "level": "A1"},
+    {"id": 177, "en": "I have a question", "ru": "У меня есть вопрос", "topic": "basics", "level": "A1"},
+    {"id": 178, "en": "I am ready", "ru": "Я готов", "topic": "basics", "level": "A1"},
+    {"id": 179, "en": "I am busy", "ru": "Я занят", "topic": "basics", "level": "A1"},
+    {"id": 180, "en": "I am happy", "ru": "Я счастлив", "topic": "feelings", "level": "A1"},
+    {"id": 181, "en": "I am sad", "ru": "Мне грустно", "topic": "feelings", "level": "A1"},
+    {"id": 182, "en": "I am tired", "ru": "Я устал", "topic": "feelings", "level": "A1"},
+    {"id": 185, "en": "I am cold", "ru": "Мне холодно", "topic": "feelings", "level": "A1"},
+    {"id": 186, "en": "I am hot", "ru": "Мне жарко", "topic": "feelings", "level": "A1"},
+    {"id": 188, "en": "I am not sure", "ru": "Я не уверен", "topic": "basics", "level": "A1"},
+    {"id": 189, "en": "I think so", "ru": "Я думаю, да", "topic": "basics", "level": "A1"},
+    {"id": 190, "en": "I don't think so", "ru": "Я думаю, нет", "topic": "basics", "level": "A1"},
+    {"id": 191, "en": "Maybe", "ru": "Может быть", "topic": "basics", "level": "A1"},
+    {"id": 192, "en": "Of course", "ru": "Конечно", "topic": "basics", "level": "A1"},
+    {"id": 193, "en": "No problem", "ru": "Без проблем", "topic": "basics", "level": "A1"},
+    {"id": 194, "en": "You are welcome", "ru": "Пожалуйста (в ответ на спасибо)", "topic": "greetings", "level": "A1"},
+    {"id": 195, "en": "Have a nice day", "ru": "Хорошего дня", "topic": "greetings", "level": "A1"},
+    {"id": 196, "en": "See you tomorrow", "ru": "Увидимся завтра", "topic": "greetings", "level": "A1"},
+    {"id": 197, "en": "Good night", "ru": "Спокойной ночи", "topic": "greetings", "level": "A1"},
+    {"id": 198, "en": "I love you", "ru": "Я тебя люблю", "topic": "feelings", "level": "A1"},
+    {"id": 199, "en": "I like it", "ru": "Мне это нравится", "topic": "basics", "level": "A1"},
+    {"id": 200, "en": "I don't like it", "ru": "Мне это не нравится", "topic": "basics", "level": "A1"},
+]
+```
+
+## File: data/phrases/level_a2.py
+```python
+PHRASES_A2 = [
+    {"id": 26, "en": "I would like some tea", "ru": "Я бы хотел чай", "topic": "food", "level": "A2"},
+    {"id": 27, "en": "Can I have the menu?", "ru": "Можно меню?", "topic": "food", "level": "A2"},
+    {"id": 28, "en": "How much does it cost?", "ru": "Сколько это стоит?", "topic": "shopping", "level": "A2"},
+    {"id": 29, "en": "I am looking for a hotel", "ru": "Я ищу отель", "topic": "travel", "level": "A2"},
+    {"id": 30, "en": "Where is the bus stop?", "ru": "Где автобусная остановка?", "topic": "travel", "level": "A2"},
+    {"id": 32, "en": "It is cold today", "ru": "Сегодня холодно", "topic": "weather", "level": "A2"},
+    {"id": 34, "en": "She is my friend", "ru": "Она моя подруга", "topic": "conversation", "level": "A2"},
+    {"id": 35, "en": "We are going to the park", "ru": "Мы идём в парк", "topic": "leisure", "level": "A2"},
+    {"id": 36, "en": "I studied English yesterday", "ru": "Вчера я учил английский", "topic": "learning", "level": "A2"},
+    {"id": 38, "en": "I am sorry for being late", "ru": "Извините за опоздание", "topic": "conversation", "level": "A2"},
+    {"id": 41, "en": "I have two brothers", "ru": "У меня два брата", "topic": "family", "level": "A2"},
+    {"id": 42, "en": "My phone is broken", "ru": "Мой телефон сломан", "topic": "tech", "level": "A2"},
+    {"id": 43, "en": "Let's meet at six", "ru": "Давай встретимся в шесть", "topic": "time", "level": "A2"},
+    {"id": 44, "en": "I prefer tea to coffee", "ru": "Я предпочитаю чай кофе", "topic": "food", "level": "A2"},
+    {"id": 45, "en": "This book is interesting", "ru": "Эта книга интересная", "topic": "learning", "level": "A2"},
+    {"id": 46, "en": "I forgot my password", "ru": "Я забыл пароль", "topic": "tech", "level": "A2"},
+    {"id": 47, "en": "The weather is nice", "ru": "Погода хорошая", "topic": "weather", "level": "A2"},
+    {"id": 48, "en": "I am tired after work", "ru": "Я устал после работы", "topic": "work", "level": "A2"},
+    {"id": 49, "en": "Can you help me please?", "ru": "Не могли бы вы мне помочь?", "topic": "conversation", "level": "A2"},
+    {"id": 50, "en": "I want to improve my English", "ru": "Хочу улучшить английский", "topic": "learning", "level": "A2"},
+    {"id": 117, "en": "I am lost", "ru": "Я заблудился", "topic": "travel", "level": "A2"},
+    {"id": 118, "en": "Where is the station?", "ru": "Где вокзал?", "topic": "travel", "level": "A2"},
+    {"id": 120, "en": "It hurts here", "ru": "Болит здесь", "topic": "health", "level": "A2"},
+    {"id": 121, "en": "I enjoy reading books", "ru": "Мне нравится читать книги", "topic": "hobbies", "level": "A2"},
+    {"id": 122, "en": "Let's meet tomorrow", "ru": "Давай встретимся завтра", "topic": "plans", "level": "A2"},
+    {"id": 123, "en": "I am learning English", "ru": "Я учу английский", "topic": "learning", "level": "A2"},
+    {"id": 124, "en": "This is too expensive", "ru": "Это слишком дорого", "topic": "shopping", "level": "A2"},
+    {"id": 125, "en": "Do you speak Russian?", "ru": "Вы говорите по-русски?", "topic": "conversation", "level": "A2"},
+    {"id": 127, "en": "Turn left at the corner", "ru": "Поверните налево на углу", "topic": "travel", "level": "A2"},
+    {"id": 128, "en": "I agree with you", "ru": "Я согласен с вами", "topic": "conversation", "level": "A2"},
+    {"id": 129, "en": "That sounds great", "ru": "Звучит отлично", "topic": "conversation", "level": "A2"},
+    {"id": 130, "en": "Keep up the good work", "ru": "Так держать", "topic": "motivation", "level": "A2"},
+    {"id": 201, "en": "I don't mind", "ru": "Я не против", "topic": "conversation", "level": "A2"},
+    {"id": 202, "en": "It doesn't matter", "ru": "Это не важно", "topic": "conversation", "level": "A2"},
+    {"id": 203, "en": "I am not interested", "ru": "Мне это неинтересно", "topic": "conversation", "level": "A2"},
+    {"id": 204, "en": "I am looking for my keys", "ru": "Я ищу свои ключи", "topic": "basics", "level": "A2"},
+    {"id": 205, "en": "I will be back soon", "ru": "Я скоро вернусь", "topic": "conversation", "level": "A2"},
+    {"id": 206, "en": "What are you doing?", "ru": "Что ты делаешь?", "topic": "conversation", "level": "A2"},
+    {"id": 207, "en": "I am working now", "ru": "Я сейчас работаю", "topic": "work", "level": "A2"},
+    {"id": 208, "en": "I am going to travel", "ru": "Я собираюсь путешествовать", "topic": "travel", "level": "A2"},
+    {"id": 209, "en": "I want to buy a ticket", "ru": "Я хочу купить билет", "topic": "travel", "level": "A2"},
+    {"id": 210, "en": "Where can I find a taxi?", "ru": "Где я могу найти такси?", "topic": "travel", "level": "A2"},
+    {"id": 211, "en": "I am staying at a hotel", "ru": "Я остановился в отеле", "topic": "travel", "level": "A2"},
+    {"id": 212, "en": "Can I pay by card?", "ru": "Можно оплатить картой?", "topic": "shopping", "level": "A2"},
+    {"id": 213, "en": "I would like a refund", "ru": "Я хотел бы возврат денег", "topic": "shopping", "level": "A2"},
+    {"id": 214, "en": "It is too big for me", "ru": "Это мне слишком велико", "topic": "shopping", "level": "A2"},
+    {"id": 215, "en": "Do you have a smaller size?", "ru": "У вас есть размер поменьше?", "topic": "shopping", "level": "A2"},
+    {"id": 216, "en": "My head hurts", "ru": "У меня болит голова", "topic": "health", "level": "A2"},
+    {"id": 217, "en": "I have a cold", "ru": "У меня простуда", "topic": "health", "level": "A2"},
+    {"id": 218, "en": "I feel better now", "ru": "Мне сейчас лучше", "topic": "health", "level": "A2"},
+    {"id": 219, "en": "What is the weather like?", "ru": "Какая погода?", "topic": "weather", "level": "A2"},
+    {"id": 220, "en": "It is raining outside", "ru": "На улице идёт дождь", "topic": "weather", "level": "A2"},
+    {"id": 221, "en": "It is sunny today", "ru": "Сегодня солнечно", "topic": "weather", "level": "A2"},
+    {"id": 222, "en": "I am learning to cook", "ru": "Я учусь готовить", "topic": "hobbies", "level": "A2"},
+    {"id": 223, "en": "I play football every week", "ru": "Я играю в футбол каждую неделю", "topic": "hobbies", "level": "A2"},
+    {"id": 224, "en": "I like watching movies", "ru": "Я люблю смотреть фильмы", "topic": "hobbies", "level": "A2"},
+    {"id": 225, "en": "We had a great time", "ru": "Мы отлично провели время", "topic": "leisure", "level": "A2"},
+    {"id": 226, "en": "I am very tired today", "ru": "Я сегодня очень устал", "topic": "feelings", "level": "A2"},
+    {"id": 227, "en": "I am worried about the exam", "ru": "Я волнуюсь из-за экзамена", "topic": "feelings", "level": "A2"},
+    {"id": 228, "en": "I am proud of you", "ru": "Я горжусь тобой", "topic": "feelings", "level": "A2"},
+    {"id": 229, "en": "I am sure about it", "ru": "Я в этом уверен", "topic": "basics", "level": "A2"},
+    {"id": 230, "en": "I have no idea", "ru": "Понятия не имею", "topic": "basics", "level": "A2"},
+]
+```
+
+## File: data/phrases/level_b1.py
+```python
+PHRASES_B1 = [
+    {"id": 51, "en": "I have been learning English for two years", "ru": "Я учу английский два года", "topic": "learning", "level": "B1"},
+    {"id": 52, "en": "Could you explain this grammar rule?", "ru": "Объясните это правило грамматики?", "topic": "learning", "level": "B1"},
+    {"id": 53, "en": "I would rather stay at home tonight", "ru": "Я лучше останусь дома сегодня", "topic": "leisure", "level": "B1"},
+    {"id": 54, "en": "The meeting has been postponed", "ru": "Встречу перенесли", "topic": "work", "level": "B1"},
+    {"id": 55, "en": "I am used to waking up early", "ru": "Я привык рано вставать", "topic": "habits", "level": "B1"},
+    {"id": 56, "en": "She suggested going for a walk", "ru": "Она предложила погулять", "topic": "leisure", "level": "B1"},
+    {"id": 57, "en": "I regret not starting earlier", "ru": "Жалею, что не начал раньше", "topic": "motivation", "level": "B1"},
+    {"id": 58, "en": "Practice makes perfect", "ru": "Практика ведёт к совершенству", "topic": "learning", "level": "B1"},
+    {"id": 59, "en": "Learning a language opens new doors", "ru": "Язык открывает новые возможности", "topic": "learning", "level": "B1"},
+    {"id": 60, "en": "I need to brush up on my vocabulary", "ru": "Нужно освежить словарный запас", "topic": "learning", "level": "B1"},
+    {"id": 61, "en": "The flight was delayed due to weather", "ru": "Рейс задержали из‑за погоды", "topic": "travel", "level": "B1"},
+    {"id": 62, "en": "I booked a room with a sea view", "ru": "Забронировал номер с видом на море", "topic": "travel", "level": "B1"},
+    {"id": 63, "en": "He apologized for the misunderstanding", "ru": "Он извинился за недоразумение", "topic": "conversation", "level": "B1"},
+    {"id": 64, "en": "I am looking forward to the weekend", "ru": "Жду выходных с нетерпением", "topic": "leisure", "level": "B1"},
+    {"id": 65, "en": "It depends on the situation", "ru": "Зависит от ситуации", "topic": "conversation", "level": "B1"},
+    {"id": 66, "en": "I can't afford it right now", "ru": "Сейчас не могу себе это позволить", "topic": "shopping", "level": "B1"},
+    {"id": 67, "en": "We ran out of milk", "ru": "У нас закончилось молоко", "topic": "food", "level": "B1"},
+    {"id": 68, "en": "I will get back to you soon", "ru": "Скоро отвечу вам", "topic": "work", "level": "B1"},
+    {"id": 69, "en": "She is responsible for the project", "ru": "Она отвечает за проект", "topic": "work", "level": "B1"},
+    {"id": 70, "en": "I feel under the weather today", "ru": "Сегодня плохо себя чувствую", "topic": "health", "level": "B1"},
+    {"id": 71, "en": "Mistakes are part of learning", "ru": "Ошибки — часть обучения", "topic": "learning", "level": "B1"},
+    {"id": 72, "en": "I try to speak English every day", "ru": "Стараюсь говорить по‑английски каждый день", "topic": "learning", "level": "B1"},
+    {"id": 73, "en": "The app helps me track progress", "ru": "Приложение помогает отслеживать прогресс", "topic": "tech", "level": "B1"},
+    {"id": 74, "en": "Consistency is the key to success", "ru": "Постоянство — ключ к успеху", "topic": "motivation", "level": "B1"},
+    {"id": 75, "en": "Don't give up on your goals", "ru": "Не сдавайся — добейся целей", "topic": "motivation", "level": "B1"},
+    {"id": 131, "en": "I have been studying for two hours", "ru": "Я учусь уже два часа", "topic": "learning", "level": "B1"},
+    {"id": 134, "en": "I am looking forward to the trip", "ru": "С нетерпением жду поездки", "topic": "travel", "level": "B1"},
+    {"id": 135, "en": "He turned down the offer", "ru": "Он отказался от предложения", "topic": "work", "level": "B1"},
+    {"id": 136, "en": "We ran out of time", "ru": "У нас закончилось время", "topic": "work", "level": "B1"},
+    {"id": 138, "en": "I used to live in London", "ru": "Раньше я жил в Лондоне", "topic": "travel", "level": "B1"},
+    {"id": 139, "en": "Could you clarify that point?", "ru": "Не могли бы уточнить этот момент?", "topic": "conversation", "level": "B1"},
+    {"id": 140, "en": "I am proud of my progress", "ru": "Горжусь своим прогрессом", "topic": "motivation", "level": "B1"},
+    {"id": 142, "en": "Let's wrap up for today", "ru": "Давай на сегодня закончим", "topic": "work", "level": "B1"},
+    {"id": 144, "en": "She is fluent in three languages", "ru": "Она свободно говорит на трёх языках", "topic": "learning", "level": "B1"},
+    {"id": 145, "en": "We need to stay focused", "ru": "Нам нужно сохранять концентрацию", "topic": "motivation", "level": "B1"},
+    {"id": 231, "en": "I have been working here for five years", "ru": "Я работаю здесь пять лет", "topic": "work", "level": "B1"},
+    {"id": 232, "en": "She is in charge of the team", "ru": "Она руководит командой", "topic": "work", "level": "B1"},
+    {"id": 233, "en": "We need to meet the deadline", "ru": "Нужно уложиться в срок", "topic": "work", "level": "B1"},
+    {"id": 234, "en": "I have a lot on my plate", "ru": "У меня много дел", "topic": "work", "level": "B1"},
+    {"id": 235, "en": "Let's discuss it over coffee", "ru": "Давай обсудим за кофе", "topic": "work", "level": "B1"},
+    {"id": 236, "en": "I am applying for a new job", "ru": "Я подаю заявку на новую работу", "topic": "work", "level": "B1"},
+    {"id": 237, "en": "The interview went well", "ru": "Собеседование прошло хорошо", "topic": "work", "level": "B1"},
+    {"id": 238, "en": "I need to improve my skills", "ru": "Мне нужно улучшить свои навыки", "topic": "learning", "level": "B1"},
+    {"id": 239, "en": "I learn something new every day", "ru": "Я узнаю что-то новое каждый день", "topic": "learning", "level": "B1"},
+    {"id": 240, "en": "I have been reading this book all week", "ru": "Я читаю эту книгу всю неделю", "topic": "learning", "level": "B1"},
+    {"id": 241, "en": "Could you give me some advice?", "ru": "Не могли бы вы дать мне совет?", "topic": "conversation", "level": "B1"},
+    {"id": 242, "en": "I appreciate your help", "ru": "Я ценю вашу помощь", "topic": "conversation", "level": "B1"},
+    {"id": 243, "en": "I am in a hurry", "ru": "Я тороплюсь", "topic": "conversation", "level": "B1"},
+    {"id": 244, "en": "It is up to you", "ru": "Решать тебе", "topic": "conversation", "level": "B1"},
+    {"id": 245, "en": "I changed my mind", "ru": "Я передумал", "topic": "conversation", "level": "B1"},
+    {"id": 246, "en": "I am looking for a job", "ru": "Я ищу работу", "topic": "work", "level": "B1"},
+    {"id": 247, "en": "I have been to London twice", "ru": "Я был в Лондоне дважды", "topic": "travel", "level": "B1"},
+    {"id": 248, "en": "I prefer traveling by train", "ru": "Я предпочитаю путешествовать на поезде", "topic": "travel", "level": "B1"},
+    {"id": 249, "en": "The hotel is close to the beach", "ru": "Отель находится рядом с пляжем", "topic": "travel", "level": "B1"},
+    {"id": 250, "en": "I need to book a flight", "ru": "Мне нужно забронировать рейс", "topic": "travel", "level": "B1"},
+    {"id": 251, "en": "I am saving up for a new car", "ru": "Я коплю на новую машину", "topic": "money", "level": "B1"},
+    {"id": 252, "en": "It is worth the money", "ru": "Это стоит своих денег", "topic": "money", "level": "B1"},
+    {"id": 253, "en": "I cannot afford a new phone", "ru": "Я не могу позволить себе новый телефон", "topic": "money", "level": "B1"},
+    {"id": 254, "en": "I am on a budget", "ru": "У меня ограниченный бюджет", "topic": "money", "level": "B1"},
+    {"id": 255, "en": "I have been feeling tired lately", "ru": "В последнее время я чувствую усталость", "topic": "health", "level": "B1"},
+    {"id": 256, "en": "I should get more sleep", "ru": "Мне нужно больше спать", "topic": "health", "level": "B1"},
+    {"id": 257, "en": "I am trying to eat healthier", "ru": "Я стараюсь питаться здоровее", "topic": "health", "level": "B1"},
+    {"id": 258, "en": "I go to the gym twice a week", "ru": "Я хожу в спортзал два раза в неделю", "topic": "habits", "level": "B1"},
+    {"id": 259, "en": "I am trying to quit smoking", "ru": "Я пытаюсь бросить курить", "topic": "habits", "level": "B1"},
+    {"id": 260, "en": "I wake up at seven every day", "ru": "Я просыпаюсь в семь каждый день", "topic": "habits", "level": "B1"},
+    {"id": 261, "en": "I am excited about the trip", "ru": "Я взволнован предстоящей поездкой", "topic": "feelings", "level": "B1"},
+    {"id": 262, "en": "I am disappointed with the result", "ru": "Я разочарован результатом", "topic": "feelings", "level": "B1"},
+    {"id": 263, "en": "I am grateful for your support", "ru": "Я благодарен за вашу поддержку", "topic": "feelings", "level": "B1"},
+    {"id": 264, "en": "I am annoyed by the noise", "ru": "Меня раздражает шум", "topic": "feelings", "level": "B1"},
+    {"id": 265, "en": "The traffic is terrible in the morning", "ru": "Утром ужасные пробки", "topic": "lifestyle", "level": "B1"},
+    {"id": 266, "en": "I live in the city center", "ru": "Я живу в центре города", "topic": "lifestyle", "level": "B1"},
+    {"id": 267, "en": "My apartment is quite small", "ru": "Моя квартира довольно маленькая", "topic": "lifestyle", "level": "B1"},
+    {"id": 268, "en": "I spend too much time on my phone", "ru": "Я провожу слишком много времени за телефоном", "topic": "lifestyle", "level": "B1"},
+    {"id": 269, "en": "I am into photography", "ru": "Я увлекаюсь фотографией", "topic": "hobbies", "level": "B1"},
+    {"id": 270, "en": "I play the guitar", "ru": "Я играю на гитаре", "topic": "hobbies", "level": "B1"},
+    {"id": 271, "en": "I am a big fan of football", "ru": "Я большой фанат футбола", "topic": "hobbies", "level": "B1"},
+    {"id": 272, "en": "I am planning a birthday party", "ru": "Я планирую вечеринку на день рождения", "topic": "events", "level": "B1"},
+    {"id": 273, "en": "The event has been cancelled", "ru": "Мероприятие отменили", "topic": "events", "level": "B1"},
+    {"id": 274, "en": "I am looking forward to the holidays", "ru": "Я с нетерпением жду праздников", "topic": "events", "level": "B1"},
+    {"id": 275, "en": "It is important to stay positive", "ru": "Важно сохранять позитивный настрой", "topic": "motivation", "level": "B1"},
+]
+```
+
+## File: data/phrases/level_b2.py
+```python
+PHRASES_B2 = [
+    {"id": 76, "en": "Had I known earlier, I would have acted differently", "ru": "Знай я раньше — поступил бы иначе", "topic": "grammar", "level": "B2"},
+    {"id": 77, "en": "The proposal is subject to approval", "ru": "Предложение требует одобрения", "topic": "work", "level": "B2"},
+    {"id": 78, "en": "She comes across as very confident", "ru": "Она производит уверенное впечатление", "topic": "conversation", "level": "B2"},
+    {"id": 79, "en": "I am keen on expanding my skill set", "ru": "Стремлюсь расширить навыки", "topic": "work", "level": "B2"},
+    {"id": 80, "en": "The issue boils down to communication", "ru": "Суть в коммуникации", "topic": "work", "level": "B2"},
+    {"id": 81, "en": "He turned down the job offer", "ru": "Он отклонил предложение о работе", "topic": "work", "level": "B2"},
+    {"id": 82, "en": "I can't make head nor tail of this", "ru": "Ничего не понимаю в этом", "topic": "learning", "level": "B2"},
+    {"id": 83, "en": "Fluency requires immersion and practice", "ru": "Беглость требует погружения и практики", "topic": "learning", "level": "B2"},
+    {"id": 84, "en": "Idioms often don't translate literally", "ru": "Идиомы редко переводятся дословно", "topic": "learning", "level": "B2"},
+    {"id": 85, "en": "She nailed the presentation", "ru": "Она блестяще провела презентацию", "topic": "work", "level": "B2"},
+    {"id": 86, "en": "We need to iron out the details", "ru": "Нужно уладить детали", "topic": "work", "level": "B2"},
+    {"id": 87, "en": "The economy is picking up gradually", "ru": "Экономика постепенно оживает", "topic": "news", "level": "B2"},
+    {"id": 88, "en": "I take pride in my progress", "ru": "Горжусь своим прогрессом", "topic": "motivation", "level": "B2"},
+    {"id": 89, "en": "Believe in yourself and stay persistent", "ru": "Верь в себя и будь настойчив", "topic": "motivation", "level": "B2"},
+    {"id": 90, "en": "Negotiations reached a stalemate", "ru": "Переговоры зашли в тупик", "topic": "work", "level": "B2"},
+    {"id": 91, "en": "The documentary shed light on the issue", "ru": "Документальный фильм прояснил вопрос", "topic": "media", "level": "B2"},
+    {"id": 92, "en": "I am swamped with deadlines", "ru": "Завален дедлайнами", "topic": "work", "level": "B2"},
+    {"id": 93, "en": "Could you elaborate on that point?", "ru": "Не могли бы развить эту мысль?", "topic": "conversation", "level": "B2"},
+    {"id": 94, "en": "The policy will take effect next month", "ru": "Политика вступит в силу в следующем месяце", "topic": "news", "level": "B2"},
+    {"id": 95, "en": "I am on the fence about moving abroad", "ru": "Сомневаюсь, переезжать ли за границу", "topic": "travel", "level": "B2"},
+    {"id": 96, "en": "Small steps lead to remarkable results", "ru": "Маленькие шаги дают выдающиеся результаты", "topic": "motivation", "level": "B2"},
+    {"id": 97, "en": "She has a knack for languages", "ru": "У неё талант к языкам", "topic": "learning", "level": "B2"},
+    {"id": 98, "en": "The lecture was thought-provoking", "ru": "Лекция заставила задуматься", "topic": "learning", "level": "B2"},
+    {"id": 99, "en": "We should strike a balance between work and rest", "ru": "Нужен баланс работы и отдыха", "topic": "habits", "level": "B2"},
+    {"id": 100, "en": "Mastering English is a marathon, not a sprint", "ru": "Английский — марафон, а не спринт", "topic": "motivation", "level": "B2"},
+    {"id": 146, "en": "The evidence speaks for itself", "ru": "Доказательства говорят сами за себя", "topic": "news", "level": "B2"},
+    {"id": 147, "en": "We must address the root cause", "ru": "Нужно устранить первопричину", "topic": "work", "level": "B2"},
+    {"id": 148, "en": "Her argument was compelling", "ru": "Её аргумент был убедительным", "topic": "learning", "level": "B2"},
+    {"id": 149, "en": "The outcome remains uncertain", "ru": "Исход остаётся неопределённым", "topic": "news", "level": "B2"},
+    {"id": 150, "en": "He took the criticism in stride", "ru": "Он спокойно воспринял критику", "topic": "habits", "level": "B2"},
+    {"id": 151, "en": "The initiative gained traction", "ru": "Инициатива получила поддержку", "topic": "work", "level": "B2"},
+    {"id": 152, "en": "She has an eye for detail", "ru": "У неё глаз на детали", "topic": "work", "level": "B2"},
+    {"id": 153, "en": "We should leverage our strengths", "ru": "Нужно использовать наши сильные стороны", "topic": "motivation", "level": "B2"},
+    {"id": 154, "en": "The deadline is fast approaching", "ru": "Дедлайн стремительно приближается", "topic": "work", "level": "B2"},
+    {"id": 155, "en": "It is a win-win situation", "ru": "Это ситуация, где выигрывают все", "topic": "work", "level": "B2"},
+    {"id": 156, "en": "He rose to the occasion", "ru": "Он оправдал ожидания в сложный момент", "topic": "motivation", "level": "B2"},
+    {"id": 157, "en": "The feedback was constructive", "ru": "Обратная связь была конструктивной", "topic": "learning", "level": "B2"},
+    {"id": 158, "en": "We need a paradigm shift", "ru": "Нужна смена парадигмы", "topic": "news", "level": "B2"},
+    {"id": 159, "en": "She eloquently defended her thesis", "ru": "Она убедительно защитила свою позицию", "topic": "learning", "level": "B2"},
+    {"id": 160, "en": "Persistence pays off in the long run", "ru": "Настойчивость окупается со временем", "topic": "motivation", "level": "B2"},
+    {"id": 276, "en": "The project is in its infancy", "ru": "Проект находится на начальной стадии", "topic": "work", "level": "B2"},
+    {"id": 277, "en": "We need to allocate resources wisely", "ru": "Нужно разумно распределять ресурсы", "topic": "work", "level": "B2"},
+    {"id": 278, "en": "The report highlights key trends", "ru": "Отчёт выделяет ключевые тенденции", "topic": "work", "level": "B2"},
+    {"id": 279, "en": "She is well-versed in marketing", "ru": "Она хорошо разбирается в маркетинге", "topic": "work", "level": "B2"},
+    {"id": 280, "en": "The company is expanding overseas", "ru": "Компания расширяется за рубежом", "topic": "work", "level": "B2"},
+    {"id": 281, "en": "The data is inconclusive", "ru": "Данные неубедительны", "topic": "news", "level": "B2"},
+    {"id": 282, "en": "The research yielded promising results", "ru": "Исследование дало обнадёживающие результаты", "topic": "news", "level": "B2"},
+    {"id": 283, "en": "Public opinion is divided", "ru": "Общественное мнение разделилось", "topic": "news", "level": "B2"},
+    {"id": 284, "en": "The country is facing economic challenges", "ru": "Страна сталкивается с экономическими вызовами", "topic": "news", "level": "B2"},
+    {"id": 285, "en": "The situation is getting out of hand", "ru": "Ситуация выходит из-под контроля", "topic": "conversation", "level": "B2"},
+    {"id": 286, "en": "I am skeptical about the proposal", "ru": "Я скептически отношусь к предложению", "topic": "conversation", "level": "B2"},
+    {"id": 287, "en": "We need to weigh the pros and cons", "ru": "Нужно взвесить все за и против", "topic": "conversation", "level": "B2"},
+    {"id": 288, "en": "That is beside the point", "ru": "Это не относится к делу", "topic": "conversation", "level": "B2"},
+    {"id": 289, "en": "I beg to differ", "ru": "Позволю себе не согласиться", "topic": "conversation", "level": "B2"},
+    {"id": 290, "en": "The implications are far-reaching", "ru": "Последствия имеют далеко идущий характер", "topic": "news", "level": "B2"},
+    {"id": 291, "en": "We are at a crossroads", "ru": "Мы на перепутье", "topic": "conversation", "level": "B2"},
+    {"id": 292, "en": "The risk is negligible", "ru": "Риск ничтожен", "topic": "conversation", "level": "B2"},
+    {"id": 293, "en": "I am committed to this goal", "ru": "Я привержен этой цели", "topic": "motivation", "level": "B2"},
+    {"id": 294, "en": "She is a self-starter", "ru": "Она самостоятельный работник", "topic": "work", "level": "B2"},
+    {"id": 295, "en": "He is burnt out", "ru": "Он выгорел", "topic": "health", "level": "B2"},
+    {"id": 296, "en": "I need a fresh perspective", "ru": "Мне нужен свежий взгляд", "topic": "learning", "level": "B2"},
+    {"id": 297, "en": "The lecture was enlightening", "ru": "Лекция была поучительной", "topic": "learning", "level": "B2"},
+    {"id": 298, "en": "I learn best by doing", "ru": "Я лучше всего учусь на практике", "topic": "learning", "level": "B2"},
+    {"id": 299, "en": "Knowledge is power", "ru": "Знание — сила", "topic": "learning", "level": "B2"},
+    {"id": 300, "en": "The experience was invaluable", "ru": "Этот опыт был бесценным", "topic": "learning", "level": "B2"},
+]
+```
+
+## File: db/base.py
+```python
+from sqlalchemy.orm import DeclarativeBase
+
+
+class Base(DeclarativeBase):
+    pass
+```
+
+## File: db/init_db.py
+```python
+from sqlalchemy import inspect
+
+from db.base import Base
+from db.session import engine
+from models.email_code import EmailCode  # noqa: F401
+from models.progress import UserProgress  # noqa: F401
+from models.srs_card import SRSCard  # noqa: F401
+from models.user import User  # noqa: F401
+
+REQUIRED_USER_COLUMNS = {"email", "last_active_at", "study_time_seconds", "streak_days", "last_streak_date"}
+
+
+def _needs_reset() -> bool:
+    insp = inspect(engine)
+    if not insp.has_table("users"):
+        return False
+    cols = {c["name"] for c in insp.get_columns("users")}
+    return not REQUIRED_USER_COLUMNS.issubset(cols)
+
+
+def init_database() -> None:
+    if _needs_reset():
+        Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+```
+
+## File: db/session.py
+```python
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import NullPool, QueuePool
+
+from core.config import get_settings
+
+settings = get_settings()
+is_sqlite = settings.database_url.startswith("sqlite")
+
+connect_args = {"check_same_thread": False} if is_sqlite else {}
+
+pool_kwargs = (
+    {"poolclass": NullPool}
+    if is_sqlite
+    else {"pool_pre_ping": True, "pool_size": 10, "max_overflow": 30}
+)
+
+engine = create_engine(
+    settings.database_url,
+    connect_args=connect_args,
+    **pool_kwargs,
+)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+```
+
+## File: models/email_code.py
+```python
+from datetime import datetime, timezone
+
+from sqlalchemy import DateTime, String
+from sqlalchemy.orm import Mapped, mapped_column
+
+from db.base import Base
+
+
+class EmailCode(Base):
+    __tablename__ = "email_codes"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(255), index=True)
+    code_hash: Mapped[str] = mapped_column(String(64))
+    purpose: Mapped[str] = mapped_column(String(16))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+    used: Mapped[bool] = mapped_column(default=False)
+```
+
+## File: models/progress.py
+```python
+from datetime import datetime, timezone
+
+from sqlalchemy import DateTime, ForeignKey, Integer, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from db.base import Base
+
+
+class UserProgress(Base):
+    __tablename__ = "user_progress"
+    __table_args__ = (UniqueConstraint("user_id", "phrase_id", name="uq_user_phrase"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    phrase_id: Mapped[int] = mapped_column(Integer, index=True)
+    view_count: Mapped[int] = mapped_column(default=0)
+    learned: Mapped[bool] = mapped_column(default=False)
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+    learned_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    user = relationship("User", back_populates="progress")
+```
+
+## File: models/srs_card.py
+```python
+from datetime import datetime, timezone
+
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from db.base import Base
+
+
+class SRSCard(Base):
+    __tablename__ = "srs_cards"
+    __table_args__ = (UniqueConstraint("user_id", "phrase_id", name="uq_srs_user_phrase"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    phrase_id: Mapped[int] = mapped_column(Integer, index=True)
+
+    # Алгоритм Лейтнера: box 0..5, чем выше — тем реже повторение
+    box: Mapped[int] = mapped_column(Integer, default=0)
+    interval_days: Mapped[int] = mapped_column(Integer, default=0)
+    repetitions: Mapped[int] = mapped_column(Integer, default=0)
+    ease_factor: Mapped[float] = mapped_column(Float, default=2.5)
+
+    # Сколько раз отвечено правильно/неправильно
+    correct_count: Mapped[int] = mapped_column(Integer, default=0)
+    wrong_count: Mapped[int] = mapped_column(Integer, default=0)
+
+    last_reviewed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    next_review_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    user = relationship("User", back_populates="srs_cards")
+```
+
+## File: models/user.py
+```python
+from datetime import datetime, timezone
+
+from sqlalchemy import DateTime, Integer, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from db.base import Base
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    hashed_password: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+    last_active_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    study_time_seconds: Mapped[int] = mapped_column(Integer, default=0)
+    streak_days: Mapped[int] = mapped_column(Integer, default=0)
+    last_streak_date: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    progress = relationship("UserProgress", back_populates="user", lazy="dynamic")
+    srs_cards = relationship("SRSCard", back_populates="user", lazy="dynamic")
+```
+
+## File: schemas/auth.py
+```python
+from pydantic import BaseModel, EmailStr, Field
+
+
+class SendCodeRequest(BaseModel):
+    email: EmailStr
+    purpose: str = Field(pattern="^(register|login)$")
+
+
+class EmailRegisterRequest(BaseModel):
+    email: EmailStr
+    code: str = Field(min_length=6, max_length=6)
+    username: str = Field(min_length=3, max_length=64)
+    password: str = Field(min_length=6, max_length=128)
+
+
+class EmailLoginCodeRequest(BaseModel):
+    email: EmailStr
+    code: str = Field(min_length=6, max_length=6)
+
+
+class EmailPasswordLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+class UserResponse(BaseModel):
+    id: int
+    email: str
+    username: str
+
+    class Config:
+        from_attributes = True
+
+
+class MessageResponse(BaseModel):
+    message: str
+```
+
+## File: schemas/leaderboard.py
+```python
+from pydantic import BaseModel, Field
+
+
+class LeaderboardEntry(BaseModel):
+    rank: int
+    user_id: int
+    username: str
+    value: int
+
+
+class LeaderboardResponse(BaseModel):
+    category: str
+    total: int
+    entries: list[LeaderboardEntry]
+    my_rank: int | None = None
+    my_value: int | None = None
+
+
+class StudyTimeRequest(BaseModel):
+    seconds: int = Field(ge=1, le=300)
+```
+
+## File: schemas/phrase.py
+```python
+from pydantic import BaseModel
+
+
+class PhraseResponse(BaseModel):
+    id: int
+    en: str
+    ru: str
+    topic: str
+    level: str
+
+
+class PhraseListResponse(BaseModel):
+    items: list[PhraseResponse]
+    total: int
+    skip: int
+    limit: int
+```
+
+## File: schemas/quiz.py
+```python
+from pydantic import BaseModel
+
+
+class QuizQuestion(BaseModel):
+    phrase_id: int
+    en: str
+    level: str
+    options: list[str]
+    correct_index: int
+
+
+class QuizResponse(BaseModel):
+    questions: list[QuizQuestion]
+    total: int
+```
+
+## File: schemas/srs.py
+```python
+from pydantic import BaseModel
+
+
+class SRSCardItem(BaseModel):
+    card_id: int
+    phrase_id: int
+    en: str
+    ru: str
+    topic: str
+    level: str
+    is_new: bool
+    box: int
+
+
+class SRSReviewResponse(BaseModel):
+    items: list[SRSCardItem]
+    total: int
+
+
+class SRSReviewRequest(BaseModel):
+    card_id: int
+    quality: int  # 0 = не знаю, 1 = знаю
+
+
+class SRSReviewResult(BaseModel):
+    card_id: int
+    phrase_id: int
+    box: int
+    interval_days: int
+    next_review_at: str | None = None
+
+
+class SRSStatsResponse(BaseModel):
+    total_cards: int
+    due_cards: int
+    new_cards: int
+    learned_cards: int
+```
+
+## File: schemas/stats.py
+```python
+from pydantic import BaseModel
+
+
+class StatsResponse(BaseModel):
+    phrases_learned: int
+    phrases_seen: int
+    total_views: int
+    total_phrases: int
+    progress_percent: float
+    active_days_week: int
+    study_time_seconds: int
+    streak_days: int
+    by_level: dict[str, int]
+
+
+class ProgressRequest(BaseModel):
+    phrase_id: int
+```
+
+## File: services/auth_service.py
+```python
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy.orm import Session
+
+from core.codes import generate_code, hash_code, verify_code
+from core.config import get_settings
+from core.security import hash_password, verify_password
+from models.email_code import EmailCode
+from models.user import User
+from services.email_service import send_verification_email
+
+
+def normalize_email(email: str) -> str:
+    return email.strip().lower()
+
+
+def get_user_by_email(db: Session, email: str) -> User | None:
+    return db.query(User).filter(User.email == normalize_email(email)).first()
+
+
+def get_user_by_id(db: Session, user_id: int) -> User | None:
+    return db.query(User).filter(User.id == user_id).first()
+
+
+def get_user_by_username(db: Session, username: str) -> User | None:
+    return db.query(User).filter(User.username == username.strip().lower()).first()
+
+
+def create_user_with_email(
+    db: Session, email: str, username: str, password: str
+) -> User:
+    email_norm = normalize_email(email)
+    user = User(
+        email=email_norm,
+        username=username.strip().lower(),
+        hashed_password=hash_password(password),
+        last_active_at=datetime.now(timezone.utc),
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def authenticate_email_password(
+    db: Session, email: str, password: str
+) -> User | None:
+    user = get_user_by_email(db, email)
+    if not user or not verify_password(password, user.hashed_password):
+        return None
+    return user
+
+
+def _invalidate_old_codes(db: Session, email: str, purpose: str) -> None:
+    db.query(EmailCode).filter(
+        EmailCode.email == email,
+        EmailCode.purpose == purpose,
+        EmailCode.used.is_(False),
+    ).update({"used": True})
+    db.commit()
+
+
+def send_email_code(db: Session, email: str, purpose: str) -> None:
+    settings = get_settings()
+    email_norm = normalize_email(email)
+    code = generate_code()
+    expires = datetime.now(timezone.utc) + timedelta(
+        minutes=settings.code_expire_minutes
+    )
+    _invalidate_old_codes(db, email_norm, purpose)
+    record = EmailCode(
+        email=email_norm,
+        code_hash=hash_code(code),
+        purpose=purpose,
+        expires_at=expires,
+    )
+    db.add(record)
+    db.commit()
+    send_verification_email(email_norm, code, purpose)
+
+
+def verify_email_code(db: Session, email: str, code: str, purpose: str) -> bool:
+    email_norm = normalize_email(email)
+    now = datetime.now(timezone.utc)
+    record = (
+        db.query(EmailCode)
+        .filter(
+            EmailCode.email == email_norm,
+            EmailCode.purpose == purpose,
+            EmailCode.used.is_(False),
+            EmailCode.expires_at > now,
+        )
+        .order_by(EmailCode.created_at.desc())
+        .first()
+    )
+    if not record or not verify_code(code, record.code_hash):
+        return False
+    record.used = True
+    db.commit()
+    return True
+```
+
+## File: services/email_service.py
+```python
+import logging
+import smtplib
+from email.mime.text import MIMEText
+
+from core.config import get_settings
+
+logger = logging.getLogger(__name__)
+
+
+def _log_dev_code(to_email: str, code: str, reason: str = "") -> None:
+    prefix = f"[DEV{f' — {reason}' if reason else ''}]"
+    logger.warning("%s Код для %s: %s", prefix, to_email, code)
+    print(f"\n>>> EMAIL CODE for {to_email}: {code} <<<\n", flush=True)
+
+
+def send_verification_email(to_email: str, code: str, purpose: str) -> None:
+    settings = get_settings()
+    is_dev = settings.app_env == "development"
+    subject = (
+        "Код для входа — English App"
+        if purpose == "login"
+        else "Код регистрации — English App"
+    )
+    body = (
+        f"Ваш код: {code}\n\n"
+        f"Действует {settings.code_expire_minutes} минут.\n"
+        "Если вы не запрашивали код — проигнорируйте письмо."
+    )
+
+    if not settings.smtp_host:
+        _log_dev_code(to_email, code, "SMTP не настроен")
+        return
+
+    msg = MIMEText(body, "plain", "utf-8")
+    msg["Subject"] = subject
+    msg["From"] = settings.smtp_from
+    msg["To"] = to_email
+
+    try:
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as server:
+            server.starttls()
+            if settings.smtp_user:
+                server.login(settings.smtp_user, settings.smtp_password)
+            server.sendmail(settings.smtp_from, [to_email], msg.as_string())
+        if is_dev:
+            _log_dev_code(to_email, code, "код также отправлен по SMTP")
+    except Exception as exc:
+        logger.error("SMTP error for %s: %s", to_email, exc)
+        _log_dev_code(to_email, code, "ошибка SMTP")
+```
+
+## File: services/leaderboard_service.py
+```python
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
+from models.progress import UserProgress
+from models.user import User
+from schemas.leaderboard import LeaderboardEntry, LeaderboardResponse
+
+LEADERBOARD_LIMIT = 100
+
+
+def get_words_leaderboard(db: Session, user_id: int | None = None) -> LeaderboardResponse:
+    learned_sq = func.count(UserProgress.id).filter(UserProgress.learned.is_(True)).label(
+        "learned_count"
+    )
+    rows = (
+        db.query(User.id, User.username, learned_sq)
+        .outerjoin(UserProgress, User.id == UserProgress.user_id)
+        .group_by(User.id, User.username)
+        .having(learned_sq > 0)
+        .order_by(learned_sq.desc(), User.username.asc())
+        .limit(LEADERBOARD_LIMIT)
+        .all()
+    )
+
+    entries = [
+        LeaderboardEntry(rank=i + 1, user_id=r.id, username=r.username, value=int(r.learned_count))
+        for i, r in enumerate(rows)
+    ]
+
+    my_rank, my_value = _my_words_rank(db, user_id) if user_id else (None, None)
+    return LeaderboardResponse(
+        category="words",
+        total=len(entries),
+        entries=entries,
+        my_rank=my_rank,
+        my_value=my_value,
+    )
+
+
+def _my_words_rank(db: Session, user_id: int) -> tuple[int | None, int | None]:
+    my_count = (
+        db.query(func.count(UserProgress.id))
+        .filter(UserProgress.user_id == user_id, UserProgress.learned.is_(True))
+        .scalar()
+        or 0
+    )
+    if my_count == 0:
+        return None, 0
+
+    subq = (
+        db.query(UserProgress.user_id, func.count(UserProgress.id).label("cnt"))
+        .filter(UserProgress.learned.is_(True))
+        .group_by(UserProgress.user_id)
+        .subquery()
+    )
+    ahead = (
+        db.query(func.count())
+        .select_from(subq)
+        .filter(subq.c.cnt > my_count)
+        .scalar()
+        or 0
+    )
+    return int(ahead) + 1, int(my_count)
+
+
+def get_time_leaderboard(db: Session, user_id: int | None = None) -> LeaderboardResponse:
+    rows = (
+        db.query(User.id, User.username, User.study_time_seconds)
+        .filter(User.study_time_seconds > 0)
+        .order_by(User.study_time_seconds.desc(), User.username.asc())
+        .limit(LEADERBOARD_LIMIT)
+        .all()
+    )
+
+    entries = [
+        LeaderboardEntry(
+            rank=i + 1, user_id=r.id, username=r.username, value=int(r.study_time_seconds)
+        )
+        for i, r in enumerate(rows)
+    ]
+
+    my_rank, my_value = _my_time_rank(db, user_id) if user_id else (None, None)
+    return LeaderboardResponse(
+        category="time",
+        total=len(entries),
+        entries=entries,
+        my_rank=my_rank,
+        my_value=my_value,
+    )
+
+
+def _my_time_rank(db: Session, user_id: int) -> tuple[int | None, int | None]:
+    user = db.get(User, user_id)
+    if not user:
+        return None, 0
+    my_time = user.study_time_seconds
+    if my_time == 0:
+        return None, 0
+    ahead = (
+        db.query(func.count(User.id))
+        .filter(User.study_time_seconds > my_time)
+        .scalar()
+        or 0
+    )
+    return int(ahead) + 1, int(my_time)
+
+
+def add_study_time(db: Session, user: User, seconds: int) -> int:
+    user.study_time_seconds += seconds
+    db.commit()
+    db.refresh(user)
+    return user.study_time_seconds
+```
+
+## File: services/phrase_service.py
+```python
+import random
+
+from data.phrases.catalog import PHRASE_BY_ID, PHRASES, TOTAL_PHRASES
+from schemas.phrase import PhraseResponse
+
+
+def _filter_pool(level: str | None = None, topic: str | None = None) -> list[dict]:
+    pool = PHRASES
+    if level:
+        pool = [p for p in pool if p["level"] == level.upper()]
+    if topic:
+        pool = [p for p in pool if p["topic"] == topic.lower()]
+    return pool
+
+
+def get_random_phrase(
+    level: str | None = None, topic: str | None = None
+) -> PhraseResponse:
+    pool = _filter_pool(level, topic)
+    if not pool:
+        pool = PHRASES
+    return PhraseResponse(**random.choice(pool))
+
+
+def get_phrases_page(
+    skip: int = 0,
+    limit: int = 20,
+    level: str | None = None,
+    topic: str | None = None,
+) -> tuple[list[PhraseResponse], int]:
+    pool = _filter_pool(level, topic)
+    total = len(pool)
+    page = pool[skip : skip + limit]
+    return [PhraseResponse(**p) for p in page], total
+
+
+def get_phrase_by_id(phrase_id: int) -> PhraseResponse | None:
+    item = PHRASE_BY_ID.get(phrase_id)
+    return PhraseResponse(**item) if item else None
+
+
+def get_total_count() -> int:
+    return TOTAL_PHRASES
+```
+
+## File: services/quiz_service.py
+```python
+import random
+
+from data.phrases.catalog import PHRASES
+from schemas.quiz import QuizQuestion, QuizResponse
+
+
+def _build_question(phrase: dict, pool: list[dict]) -> QuizQuestion:
+    """Строит вопрос: перевод фразы + 3 неправильных варианта."""
+    correct = phrase["ru"]
+    wrong_options = [p["ru"] for p in pool if p["id"] != phrase["id"]]
+    random.shuffle(wrong_options)
+    options = [correct] + wrong_options[:3]
+    random.shuffle(options)
+    return QuizQuestion(
+        phrase_id=phrase["id"],
+        en=phrase["en"],
+        level=phrase["level"],
+        options=options,
+        correct_index=options.index(correct),
+    )
+
+
+def get_quiz(level: str | None = None, count: int = 10) -> QuizResponse:
+    """Возвращает набор вопросов для тренировки."""
+    pool = PHRASES
+    if level:
+        pool = [p for p in pool if p["level"] == level.upper()]
+    if not pool:
+        pool = PHRASES
+
+    count = max(1, min(count, 20))
+    selected = random.sample(pool, min(count, len(pool)))
+    questions = [_build_question(p, pool) for p in selected]
+    return QuizResponse(questions=questions, total=len(questions))
+```
+
+## File: services/srs_service.py
+```python
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
+from data.phrases.catalog import PHRASE_BY_ID, PHRASES
+from models.srs_card import SRSCard
+from schemas.srs import SRSReviewResponse, SRSStatsResponse
+
+# Интервалы Лейтнера (в днях) для каждого бокса
+BOX_INTERVALS = [0, 1, 3, 7, 14, 30]
+MAX_BOX = 5
+DAILY_NEW_LIMIT = 10
+DAILY_REVIEW_LIMIT = 20
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _get_or_create_card(db: Session, user_id: int, phrase_id: int) -> SRSCard:
+    card = (
+        db.query(SRSCard)
+        .filter(SRSCard.user_id == user_id, SRSCard.phrase_id == phrase_id)
+        .first()
+    )
+    if not card:
+        card = SRSCard(user_id=user_id, phrase_id=phrase_id)
+        db.add(card)
+        db.flush()
+    return card
+
+
+def get_due_cards(db: Session, user_id: int, limit: int = 20) -> list[SRSCard]:
+    """Карточки, которые нужно повторить сегодня (next_review_at <= now)."""
+    now = _now()
+    return (
+        db.query(SRSCard)
+        .filter(
+            SRSCard.user_id == user_id,
+            SRSCard.next_review_at.isnot(None),
+            SRSCard.next_review_at <= now,
+        )
+        .order_by(SRSCard.next_review_at.asc())
+        .limit(limit)
+        .all()
+    )
+
+
+def get_new_cards(db: Session, user_id: int, limit: int = 10) -> list[SRSCard]:
+    """Новые карточки, которые ещё не добавлены в SRS."""
+    existing_ids = {
+        row[0]
+        for row in db.query(SRSCard.phrase_id).filter(SRSCard.user_id == user_id).all()
+    }
+    new_phrases = [p for p in PHRASES if p["id"] not in existing_ids]
+    # Сначала новые фразы из нижних уровней (A1 -> B2)
+    level_order = {"A1": 0, "A2": 1, "B1": 2, "B2": 3}
+    new_phrases.sort(key=lambda p: (level_order.get(p["level"], 9), p["id"]))
+    selected = new_phrases[:limit]
+    return [_get_or_create_card(db, user_id, p["id"]) for p in selected]
+
+
+def get_review_session(
+    db: Session, user_id: int, limit: int = 20
+) -> SRSReviewResponse:
+    """Собирает сессию повторения: due-карточки + новые."""
+    due = get_due_cards(db, user_id, limit=DAILY_REVIEW_LIMIT)
+    new_count = max(0, limit - len(due))
+    new = get_new_cards(db, user_id, limit=min(new_count, DAILY_NEW_LIMIT))
+
+    cards = due + new
+    items = []
+    for card in cards:
+        phrase = PHRASE_BY_ID.get(card.phrase_id)
+        if not phrase:
+            continue
+        items.append(
+            {
+                "card_id": card.id,
+                "phrase_id": phrase["id"],
+                "en": phrase["en"],
+                "ru": phrase["ru"],
+                "topic": phrase["topic"],
+                "level": phrase["level"],
+                "is_new": card.repetitions == 0,
+                "box": card.box,
+            }
+        )
+    return SRSReviewResponse(items=items, total=len(items))
+
+
+def review_card(
+    db: Session, user_id: int, card_id: int, quality: int
+) -> dict:
+    """Обрабатывает ответ пользователя по алгоритму Лейтнера.
+
+    quality: 0 = не знаю, 1 = знаю
+    """
+    card = db.get(SRSCard, card_id)
+    if not card or card.user_id != user_id:
+        raise ValueError("Карточка не найдена")
+
+    now = _now()
+    card.last_reviewed_at = now
+
+    if quality == 0:
+        # Не знаю — сбрасываем в бокс 0, повторяем завтра
+        card.box = 0
+        card.interval_days = 1
+        card.repetitions = 0
+        card.wrong_count += 1
+        card.next_review_at = now + timedelta(days=1)
+    else:
+        # Знаю — повышаем бокс
+        card.correct_count += 1
+        card.repetitions += 1
+        if card.box < MAX_BOX:
+            card.box += 1
+        card.interval_days = BOX_INTERVALS[card.box]
+        card.next_review_at = now + timedelta(days=card.interval_days)
+
+    db.commit()
+    db.refresh(card)
+
+    return {
+        "card_id": card.id,
+        "phrase_id": card.phrase_id,
+        "box": card.box,
+        "interval_days": card.interval_days,
+        "next_review_at": card.next_review_at.isoformat() if card.next_review_at else None,
+    }
+
+
+def get_srs_stats(db: Session, user_id: int) -> SRSStatsResponse:
+    """Статистика SRS для пользователя."""
+    total = (
+        db.query(func.count(SRSCard.id)).filter(SRSCard.user_id == user_id).scalar() or 0
+    )
+    due = (
+        db.query(func.count(SRSCard.id))
+        .filter(
+            SRSCard.user_id == user_id,
+            SRSCard.next_review_at.isnot(None),
+            SRSCard.next_review_at <= _now(),
+        )
+        .scalar()
+        or 0
+    )
+    new = total - (
+        db.query(func.count(SRSCard.id))
+        .filter(SRSCard.user_id == user_id, SRSCard.repetitions > 0)
+        .scalar()
+        or 0
+    )
+    learned = (
+        db.query(func.count(SRSCard.id))
+        .filter(SRSCard.user_id == user_id, SRSCard.box >= 3)
+        .scalar()
+        or 0
+    )
+    return SRSStatsResponse(
+        total_cards=total,
+        due_cards=due,
+        new_cards=new,
+        learned_cards=learned,
+    )
+```
+
+## File: services/stats_service.py
+```python
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
+from data.phrases.catalog import LEVELS, TOTAL_PHRASES
+from models.progress import UserProgress
+from models.user import User
+from schemas.stats import StatsResponse
+
+
+def touch_user_active(db: Session, user: User) -> None:
+    now = datetime.now(timezone.utc)
+    user.last_active_at = now
+
+    # Обновляем серию дней (streak)
+    today = now.date()
+    if user.last_streak_date is None:
+        user.streak_days = 1
+        user.last_streak_date = now
+    else:
+        last = user.last_streak_date.date()
+        if last == today:
+            pass  # уже сегодня
+        elif (today - last).days == 1:
+            user.streak_days += 1
+            user.last_streak_date = now
+        else:
+            user.streak_days = 1
+            user.last_streak_date = now
+
+    db.commit()
+
+
+def record_view(db: Session, user_id: int, phrase_id: int) -> None:
+    row = (
+        db.query(UserProgress)
+        .filter(
+            UserProgress.user_id == user_id,
+            UserProgress.phrase_id == phrase_id,
+        )
+        .first()
+    )
+    now = datetime.now(timezone.utc)
+    if row:
+        row.view_count += 1
+        row.last_seen_at = now
+    else:
+        row = UserProgress(user_id=user_id, phrase_id=phrase_id, view_count=1)
+        db.add(row)
+    db.commit()
+
+
+def mark_learned(db: Session, user_id: int, phrase_id: int) -> None:
+    row = (
+        db.query(UserProgress)
+        .filter(
+            UserProgress.user_id == user_id,
+            UserProgress.phrase_id == phrase_id,
+        )
+        .first()
+    )
+    now = datetime.now(timezone.utc)
+    if row:
+        row.learned = True
+        row.learned_at = now
+        row.last_seen_at = now
+    else:
+        db.add(
+            UserProgress(
+                user_id=user_id,
+                phrase_id=phrase_id,
+                learned=True,
+                learned_at=now,
+                view_count=1,
+            )
+        )
+    db.commit()
+
+
+def get_user_stats(db: Session, user_id: int) -> StatsResponse:
+    learned = (
+        db.query(func.count(UserProgress.id))
+        .filter(UserProgress.user_id == user_id, UserProgress.learned.is_(True))
+        .scalar()
+        or 0
+    )
+    views = (
+        db.query(func.coalesce(func.sum(UserProgress.view_count), 0))
+        .filter(UserProgress.user_id == user_id)
+        .scalar()
+        or 0
+    )
+    seen = (
+        db.query(func.count(UserProgress.id))
+        .filter(UserProgress.user_id == user_id)
+        .scalar()
+        or 0
+    )
+    by_level: dict[str, int] = {lvl: 0 for lvl in LEVELS}
+    rows = (
+        db.query(UserProgress.phrase_id)
+        .filter(UserProgress.user_id == user_id, UserProgress.learned.is_(True))
+        .all()
+    )
+    from data.phrases.catalog import PHRASE_BY_ID
+
+    for (pid,) in rows:
+        p = PHRASE_BY_ID.get(pid)
+        if p:
+            lvl = p["level"]
+            by_level[lvl] = by_level.get(lvl, 0) + 1
+
+    week_ago = datetime.now(timezone.utc) - timedelta(days=7)
+    active_days = (
+        db.query(func.count(func.distinct(func.date(UserProgress.last_seen_at))))
+        .filter(
+            UserProgress.user_id == user_id,
+            UserProgress.last_seen_at >= week_ago,
+        )
+        .scalar()
+        or 0
+    )
+
+    progress_pct = round((learned / TOTAL_PHRASES) * 100, 1) if TOTAL_PHRASES else 0
+
+    user = db.get(User, user_id)
+    study_time = user.study_time_seconds if user else 0
+    streak_days = user.streak_days if user else 0
+
+    return StatsResponse(
+        phrases_learned=learned,
+        phrases_seen=seen,
+        total_views=int(views),
+        total_phrases=TOTAL_PHRASES,
+        progress_percent=progress_pct,
+        active_days_week=int(active_days),
+        study_time_seconds=int(study_time),
+        streak_days=int(streak_days),
+        by_level=by_level,
+    )
+```
+
+## File: tests/test_srs.py
+```python
+import sys
+import os
+from datetime import datetime, timedelta, timezone
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from db.base import Base
+from models.srs_card import SRSCard
+from models.user import User
+from services.srs_service import (
+    get_review_session,
+    get_srs_stats,
+    review_card,
+    get_new_cards,
+    get_due_cards,
+)
+
+# Используем in-memory SQLite для тестов
+engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+TestingSession = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+def setup_module():
+    Base.metadata.create_all(bind=engine)
+
+
+def teardown_module():
+    Base.metadata.drop_all(bind=engine)
+
+
+def _make_user(db, email="test@test.com", username="tester"):
+    user = User(email=email, username=username, hashed_password="x")
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def test_new_cards_created():
+    db = TestingSession()
+    user = _make_user(db)
+    cards = get_new_cards(db, user.id, limit=5)
+    assert len(cards) == 5
+    assert all(c.user_id == user.id for c in cards)
+    db.close()
+
+
+def test_review_session_returns_new_cards():
+    db = TestingSession()
+    user = _make_user(db, email="test2@test.com", username="tester2")
+    session = get_review_session(db, user.id, limit=10)
+    assert session.total > 0
+    assert all(item.is_new for item in session.items)
+    db.close()
+
+
+def test_review_known_increases_box():
+    db = TestingSession()
+    user = _make_user(db, email="test3@test.com", username="tester3")
+    cards = get_new_cards(db, user.id, limit=1)
+    card = cards[0]
+    result = review_card(db, user.id, card.id, 1)
+    assert result["box"] == 1
+    assert result["interval_days"] == 1
+    db.close()
+
+
+def test_review_unknown_resets_box():
+    db = TestingSession()
+    user = _make_user(db, email="test4@test.com", username="tester4")
+    cards = get_new_cards(db, user.id, limit=1)
+    card = cards[0]
+    # Сначала "знаю" — бокс 1
+    review_card(db, user.id, card.id, 1)
+    # Потом "не знаю" — сброс в бокс 0
+    result = review_card(db, user.id, card.id, 0)
+    assert result["box"] == 0
+    assert result["interval_days"] == 1
+    db.close()
+
+
+def test_due_cards_after_review():
+    db = TestingSession()
+    user = _make_user(db, email="test5@test.com", username="tester5")
+    cards = get_new_cards(db, user.id, limit=1)
+    card = cards[0]
+    # Отвечаем "знаю" — next_review_at = завтра, не due сегодня
+    review_card(db, user.id, card.id, 1)
+    due = get_due_cards(db, user.id)
+    assert card.id not in [c.id for c in due]
+    db.close()
+
+
+def test_srs_stats():
+    db = TestingSession()
+    user = _make_user(db, email="test6@test.com", username="tester6")
+    get_new_cards(db, user.id, limit=3)
+    stats = get_srs_stats(db, user.id)
+    assert stats.total_cards == 3
+    assert stats.new_cards == 3
+    assert stats.learned_cards == 0
+    db.close()
+```
+
+## File: catalog_check.txt
+```
+TOTAL=285
+UNIQUE_IDS=285
+DUP_IDS=[]
+DUP_EN=['nice to meet you']
+BY_LEVEL={'A1': 77, 'A2': 63, 'B1': 80, 'B2': 65}
+```
+
+## File: docker-compose.yml
+```yaml
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-english_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-english_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-english_app}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-english_user} -d ${POSTGRES_DB:-english_app}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-english_user}:${POSTGRES_PASSWORD:-english_pass}@db:5432/${POSTGRES_DB:-english_app}
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production-use-long-random-string}
+    volumes:
+      - .:/app
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+```
+
+## File: Dockerfile
+```dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+```
+
+## File: main.py
+```python
+import uvicorn
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+
+from api.routes import auth, leaderboard, phrases, progress, quiz, srs
+from api.routes.auth import limiter
+from core.config import get_settings
+from db.init_db import init_database
+
+app = FastAPI(title="English Learning API")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+
+settings = get_settings()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(auth.router)
+app.include_router(phrases.router)
+app.include_router(progress.router)
+app.include_router(leaderboard.router)
+app.include_router(quiz.router)
+app.include_router(srs.router)
+
+
+@app.on_event("startup")
+def on_startup():
+    init_database()
+
+
+init_database()
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok", "ready": True}
+
+
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+```
+
+## File: requirements.txt
+```
+fastapi==0.115.0
+uvicorn[standard]==0.30.0
+sqlalchemy==2.0.36
+psycopg2-binary==2.9.10
+python-dotenv==1.0.1
+python-jose[cryptography]==3.3.0
+bcrypt==4.2.1
+python-multipart==0.0.12
+pydantic==2.9.2
+email-validator==2.2.0
+slowapi==0.1.9
+```
