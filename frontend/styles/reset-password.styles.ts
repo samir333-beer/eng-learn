@@ -16,6 +16,16 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 24,
   },
+  backButton: {
+    marginBottom: 20,
+    alignSelf: 'flex-start',
+    minWidth: 48,
+    minHeight: 48,
+    padding: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
   header: {
     alignItems: 'center',
     marginBottom: 40,

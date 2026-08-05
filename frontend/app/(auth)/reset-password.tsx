@@ -1,7 +1,9 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
+import { useEffect } from 'react';
 import {
   ActivityIndicator,
+  BackHandler,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -21,6 +23,7 @@ import { styles } from '../../styles/reset-password.styles';
 export default function ResetPasswordScreen() {
   const p = useThemePalette();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
 
   const {
     step,
@@ -47,7 +50,35 @@ export default function ResetPasswordScreen() {
     sendCode,
     resendCode,
     resetPassword,
+    goBackToEmail,
   } = useResetPassword();
+
+  // Stepwise back navigation:
+  // - On step 'email' (screen 2): router.back() returns to login (screen 1).
+  // - On step 'reset' (screen 3): goBackToEmail() returns to step 'email' (screen 2),
+  //   never skipping a step. The system back gesture/button on Android is handled
+  //   by the same logic via the onPress handler below.
+  const handleBack = () => {
+    if (step === 'reset') {
+      goBackToEmail();
+    } else {
+      router.back();
+    }
+  };
+
+  // Intercept the Android system back button/gesture so that from step 'reset'
+  // (screen 3) it returns to step 'email' (screen 2) instead of skipping
+  // straight to login (screen 1). The flow stays strictly stepwise.
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (step === 'reset') {
+        goBackToEmail();
+        return true; // prevent default back navigation (would skip to login)
+      }
+      return false; // allow default back navigation (screen 2 → login)
+    });
+    return () => subscription.remove();
+  }, [step, goBackToEmail]);
 
   return (
     <View style={[styles.root, { backgroundColor: p.bg }]}>
@@ -63,6 +94,14 @@ export default function ResetPasswordScreen() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled">
           <View style={[styles.content, { paddingTop: insets.top + 24 }]}>
+            {/* Back button — visually identical to the one on the register screen */}
+            <Pressable
+              onPress={handleBack}
+              style={styles.backButton}
+              hitSlop={12}>
+              <Ionicons name="chevron-back" size={28} color={p.text} />
+            </Pressable>
+
             {/* Header */}
             <View style={styles.header}>
               <View style={styles.iconBadge}>

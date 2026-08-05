@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 
 import { forgotPassword, resetPassword } from '@/lib/api/auth';
@@ -138,6 +138,20 @@ export function useResetPassword() {
 
   const canResend = resendIn === 0 && !resending;
 
+  // Stepwise back navigation: from step 'reset' (screen 3) return to step 'email' (screen 2).
+  // This keeps the flow strictly stepwise — the user must go through the email step
+  // before reaching the login screen, never skipping a step.
+  const goBackToEmail = useCallback(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    setStep('email');
+    setCode('');
+    setNewPassword('');
+    setCodeError('');
+    setPasswordError('');
+    setResendIn(RESEND_SECONDS);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return {
     step,
     email,
@@ -163,5 +177,6 @@ export function useResetPassword() {
     sendCode: handleSendCode,
     resendCode: handleResendCode,
     resetPassword: handleResetPassword,
+    goBackToEmail,
   };
 }
