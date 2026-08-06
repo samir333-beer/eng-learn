@@ -11,9 +11,30 @@ import { getApiError } from '@/lib/errors';
 import { useThemePalette } from '@/hooks/use-theme-palette';
 
 const socialProviders = [
-  { id: 'google', icon: 'logo-google' as const, label: 'Google', color: '#EA4335' },
-  { id: 'apple', icon: 'logo-apple' as const, label: 'Apple', color: '#1A1A1A' },
-  { id: 'telegram', icon: 'paper-plane' as const, label: 'Telegram', color: '#0088cc' },
+  {
+    id: 'google',
+    icon: 'logo-google' as const,
+    label: 'Google',
+    bg: '#FFFFFF',
+    iconColor: '#EA4335',
+    borderColor: '#E5E7EB',
+  },
+  {
+    id: 'apple',
+    icon: 'logo-apple' as const,
+    label: 'Apple',
+    bg: '#1A1A1A',
+    iconColor: '#FFFFFF',
+    borderColor: '#1A1A1A',
+  },
+  {
+    id: 'telegram',
+    icon: 'paper-plane' as const,
+    label: 'Telegram',
+    bg: '#0088CC',
+    iconColor: '#FFFFFF',
+    borderColor: '#0088CC',
+  },
 ];
 
 export default function RegisterScreen() {
@@ -43,7 +64,7 @@ export default function RegisterScreen() {
   };
 
   return (
-    <Screen scroll style={styles.container}>
+    <Screen scroll glow={false} style={styles.container}>
       <Pressable 
         onPress={() => router.back()}
         style={styles.backButton}
@@ -101,11 +122,11 @@ export default function RegisterScreen() {
             key={item.id}
             style={({ pressed }) => [
               styles.socialButton,
-              { backgroundColor: p.card, borderColor: p.border },
+              { backgroundColor: item.bg, borderColor: item.borderColor },
               pressed && { opacity: 0.8 },
             ]}
             onPress={() => {}}>
-            <Ionicons name={item.icon} size={24} color={item.color} />
+            <Ionicons name={item.icon} size={24} color={item.iconColor} />
           </Pressable>
         ))}
       </View>
@@ -114,7 +135,7 @@ export default function RegisterScreen() {
         <Text style={[styles.footerText, { color: p.textMuted }]}>
           Уже есть аккаунт?{' '}
         </Text>
-        <Link href="/(auth)/login" style={[styles.link, { color: p.textMuted }]}>
+        <Link href="/(auth)/login" style={styles.link}>
           Войти
         </Link>
       </View>
@@ -213,6 +234,7 @@ const styles = StyleSheet.create({
   },
   link: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '500',
+    color: '#7C7A9A',
   },
 });

@@ -16,6 +16,7 @@ import { useThemePalette } from '@/hooks/use-theme-palette';
 type Props = ViewProps & {
   scroll?: boolean;
   padded?: boolean;
+  glow?: boolean;
   refreshControl?: ReactElement<RefreshControlProps>;
 };
 
@@ -23,6 +24,7 @@ export function Screen({
   children,
   scroll,
   padded = true,
+  glow = true,
   style,
   refreshControl,
   ...rest
@@ -44,10 +46,12 @@ export function Screen({
 
   return (
     <View style={[styles.root, { backgroundColor: p.bg }]}>
-      <LinearGradient
-        colors={[`${p.primary}22`, 'transparent']}
-        style={styles.glow}
-      />
+      {glow && (
+        <LinearGradient
+          colors={[`${p.primary}22`, 'transparent']}
+          style={styles.glow}
+        />
+      )}
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
