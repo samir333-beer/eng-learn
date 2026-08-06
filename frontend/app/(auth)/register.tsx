@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AuthInput } from '@/components/auth/AuthInput';
 import { AppButton } from '@/components/ui/AppButton';
 import { Screen } from '@/components/ui/Screen';
+import { SocialIcon } from '@/components/ui/SocialIcon';
 import { sendEmailCode } from '@/lib/api/auth';
 import { getApiError } from '@/lib/errors';
 import { useThemePalette } from '@/hooks/use-theme-palette';
@@ -13,27 +14,28 @@ import { useThemePalette } from '@/hooks/use-theme-palette';
 const socialProviders = [
   {
     id: 'google',
-    icon: 'logo-google' as const,
+    provider: 'google' as const,
     label: 'Google',
     bg: '#FFFFFF',
-    iconColor: '#EA4335',
     borderColor: '#E5E7EB',
+    borderWidth: 1.5,
   },
   {
     id: 'apple',
-    icon: 'logo-apple' as const,
+    provider: 'apple' as const,
     label: 'Apple',
-    bg: '#1A1A1A',
-    iconColor: '#FFFFFF',
-    borderColor: '#1A1A1A',
+    bg: '#FFFFFF',
+    iconColor: '#000000',
+    borderColor: '#E5E7EB',
+    borderWidth: 1.5,
   },
   {
     id: 'telegram',
-    icon: 'paper-plane' as const,
+    provider: 'telegram' as const,
     label: 'Telegram',
     bg: '#0088CC',
     iconColor: '#FFFFFF',
-    borderColor: '#0088CC',
+    borderWidth: 0,
   },
 ];
 
@@ -122,11 +124,15 @@ export default function RegisterScreen() {
             key={item.id}
             style={({ pressed }) => [
               styles.socialButton,
-              { backgroundColor: item.bg, borderColor: item.borderColor },
+              {
+                backgroundColor: item.bg,
+                borderColor: item.borderColor,
+                borderWidth: item.borderWidth,
+              },
               pressed && { opacity: 0.8 },
             ]}
             onPress={() => {}}>
-            <Ionicons name={item.icon} size={24} color={item.iconColor} />
+            <SocialIcon provider={item.provider} size={24} color={item.iconColor ?? '#000000'} />
           </Pressable>
         ))}
       </View>
