@@ -29,14 +29,6 @@ const socialProviders = [
     borderColor: '#E5E7EB',
     borderWidth: 1.5,
   },
-  {
-    id: 'telegram',
-    provider: 'telegram' as const,
-    label: 'Telegram',
-    bg: '#0088CC',
-    iconColor: '#FFFFFF',
-    borderWidth: 0,
-  },
 ];
 
 export default function RegisterScreen() {

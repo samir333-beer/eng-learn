@@ -341,15 +341,6 @@ export default function ResetPasswordScreen() {
                 onPress={() => {}}>
                 <Ionicons name="logo-apple" size={22} color="#fff" />
               </Pressable>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.socialButton,
-                  { backgroundColor: '#0088cc' },
-                  pressed && { opacity: 0.85 },
-                ]}
-                onPress={() => {}}>
-                <Ionicons name="paper-plane" size={22} color="#fff" />
-              </Pressable>
             </View>
 
             {/* Back to login */}

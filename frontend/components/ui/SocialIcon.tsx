@@ -1,12 +1,12 @@
 import React from 'react';
 import Svg, { Path } from 'react-native-svg';
 
-export type SocialProvider = 'google' | 'apple' | 'telegram';
+export type SocialProvider = 'google' | 'apple';
 
 interface SocialIconProps {
   provider: SocialProvider;
   size?: number;
-  /** Used for single-color glyphs (black apple). Ignored for Google and Telegram. */
+  /** Used for single-color glyphs (black apple). Ignored for Google. */
   color?: string;
 }
 
@@ -31,18 +31,6 @@ const APPLE_PATH =
   '1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-' +
   '3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.56-1.702';
 
-/**
- * Official Telegram logo glyph — the white paper-plane from the official
- * Telegram logo (telegram.org brand asset, https://telegram.org/img/t_logo.svg).
- * The blue circle behind it is the button background (#0088CC), so the plane
- * paths are rendered on top of it exactly like the official mark.
- */
-const TELEGRAM_PLANE_PATHS = [
-  { fill: '#FFFFFF', d: 'M98 175c-3.888 0-3.227-1.468-4.568-5.17L82 132.207 170 80' },
-  { fill: '#EEEEEE', d: 'M98 175c3 0 4.325-1.372 6-3l16-15.558-19.958-12.035' },
-  { fill: '#FFFFFF', d: 'M100.04 144.41l48.36 35.729c5.519 3.045 9.501 1.468 10.876-5.123l19.685-92.763c2.015-8.08-3.08-11.746-8.36-9.349l-115.5 44.55c-7.89 3.17-7.844 7.567-1.438 9.53l29.663 9.279 68.673-43.325c3.242-1.965 6.218-.91 3.776 1.258' },
-];
-
 export function SocialIcon({ provider, size = 24, color = '#000000' }: SocialIconProps) {
   switch (provider) {
     case 'google':
@@ -54,18 +42,10 @@ export function SocialIcon({ provider, size = 24, color = '#000000' }: SocialIco
         </Svg>
       );
     case 'apple':
+    default:
       return (
         <Svg width={size} height={size} viewBox="0 0 24 24">
           <Path fill={color} d={APPLE_PATH} />
-        </Svg>
-      );
-    case 'telegram':
-    default:
-      return (
-        <Svg width={size} height={size} viewBox="0 0 240 240">
-          {TELEGRAM_PLANE_PATHS.map((p) => (
-            <Path key={p.fill + '.' + p.d} fill={p.fill} d={p.d} />
-          ))}
         </Svg>
       );
   }
