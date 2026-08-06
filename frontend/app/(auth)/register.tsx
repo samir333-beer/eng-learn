@@ -1,13 +1,12 @@
 import { Link, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View, Pressable } from 'react-native';
+import { StyleSheet, Text, View, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { AuthInput } from '@/components/auth/AuthInput';
 import { AppButton } from '@/components/ui/AppButton';
 import { Screen } from '@/components/ui/Screen';
 import { sendEmailCode } from '@/lib/api/auth';
-import { useAuth } from '@/context/AuthContext';
 import { getApiError } from '@/lib/errors';
 import { useThemePalette } from '@/hooks/use-theme-palette';
 
@@ -18,17 +17,11 @@ const socialProviders = [
 ];
 
 export default function RegisterScreen() {
-  const { signUp } = useAuth();
   const router = useRouter();
   const p = useThemePalette();
   const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [codeSent, setCodeSent] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
 
   const onSendCode = async () => {
     setError('');
@@ -39,7 +32,9 @@ export default function RegisterScreen() {
     setLoading(true);
     try {
       await sendEmailCode(email.trim(), 'register');
-      setCodeSent(true);
+      // Push the next step onto the navigation stack so that
+      // the system back gesture / UI back button can return here.
+      router.push(`./register-code?email=${encodeURIComponent(email.trim())}`);
     } catch (e) {
       setError(getApiError(e, 'Не удалось отправить код'));
     } finally {
@@ -47,46 +42,10 @@ export default function RegisterScreen() {
     }
   };
 
-  const onRegister = async () => {
-    setError('');
-    if (!codeSent) {
-      await onSendCode();
-      return;
-    }
-    if (code.trim().length < 6) {
-      setError('Введите 6-значный код из письма');
-      return;
-    }
-    if (username.trim().length < 3) {
-      setError('Имя — минимум 3 символа');
-      return;
-    }
-    if (password.length < 6) {
-      setError('Пароль — минимум 6 символов');
-      return;
-    }
-    setLoading(true);
-    try {
-      await signUp(email.trim(), code.trim(), username.trim(), password);
-    } catch (e) {
-      setError(getApiError(e, 'Ошибка регистрации'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading && codeSent === undefined) {
-    return (
-      <Screen>
-        <ActivityIndicator size="large" color={p.primary} style={{ marginTop: 80 }} />
-      </Screen>
-    );
-  }
-
   return (
     <Screen scroll style={styles.container}>
       <Pressable 
-        onPress={() => router.replace('/(auth)/login')}
+        onPress={() => router.back()}
         style={styles.backButton}
         hitSlop={12}
       >
@@ -114,98 +73,19 @@ export default function RegisterScreen() {
             onChangeText={setEmail}
             keyboardType="email-address"
             autoComplete="email"
-            editable={!codeSent}
             style={styles.inputWithIcon}
           />
         </View>
-
-        {codeSent ? (
-          <>
-            <View style={styles.inputWrapper}>
-              <Ionicons 
-                name="checkmark-done" 
-                size={20} 
-                color={p.textMuted} 
-                style={styles.inputIcon} 
-              />
-              <AuthInput
-                placeholder="Код из письма"
-                value={code}
-                onChangeText={setCode}
-                keyboardType="number-pad"
-                maxLength={6}
-                style={styles.inputWithIcon}
-              />
-            </View>
-
-            <View style={styles.inputWrapper}>
-              <Ionicons 
-                name="person-outline" 
-                size={20} 
-                color={p.textMuted} 
-                style={styles.inputIcon} 
-              />
-              <AuthInput
-                placeholder="Имя пользователя"
-                value={username}
-                onChangeText={setUsername}
-                autoComplete="username"
-                style={styles.inputWithIcon}
-              />
-            </View>
-
-            <View style={styles.inputWrapper}>
-              <Ionicons 
-                name="lock-closed-outline" 
-                size={20} 
-                color={p.textMuted} 
-                style={styles.inputIcon} 
-              />
-              <AuthInput
-                placeholder="Пароль (минимум 6 символов)"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                autoComplete="new-password"
-                style={styles.inputWithIcon}
-              />
-              <Pressable 
-                onPress={() => setShowPassword(!showPassword)}
-                style={styles.eyeIcon}
-              >
-                <Ionicons 
-                  name={showPassword ? "eye-outline" : "eye-off-outline"} 
-                  size={20} 
-                  color={p.textMuted} 
-                />
-              </Pressable>
-            </View>
-          </>
-        ) : null}
       </View>
 
       {error ? <Text style={[styles.error, { color: p.danger }]}>{error}</Text> : null}
 
       <AppButton
-        title={
-          codeSent ? 
-            (loading ? 'Создание аккаунта…' : 'Создать аккаунт') : 
-            (loading ? 'Отправка кода…' : 'Отправить код')
-        }
-        onPress={codeSent ? onRegister : onSendCode}
+        title={loading ? 'Отправка кода…' : 'Отправить код'}
+        onPress={onSendCode}
         loading={loading}
         style={styles.mainButton}
       />
-
-      {codeSent ? (
-        <AppButton
-          title="Отправить код снова"
-          variant="ghost"
-          onPress={onSendCode}
-          loading={loading}
-          style={styles.secondaryButton}
-        />
-      ) : null}
 
       <View style={styles.dividerContainer}>
         <View style={[styles.dividerLine, { backgroundColor: p.border }]} />
@@ -285,11 +165,6 @@ const styles = StyleSheet.create({
   inputWithIcon: {
     paddingLeft: 48,
   },
-  eyeIcon: {
-    position: 'absolute',
-    right: 16,
-    padding: 4,
-  },
   error: {
     textAlign: 'center',
     marginBottom: 16,
@@ -297,9 +172,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   mainButton: {
-    marginBottom: 12,
-  },
-  secondaryButton: {
     marginBottom: 24,
   },
   dividerContainer: {
