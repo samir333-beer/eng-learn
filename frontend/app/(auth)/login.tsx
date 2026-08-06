@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AuthInput } from '@/components/auth/AuthInput';
 import { AppButton } from '@/components/ui/AppButton';
 import { Screen } from '@/components/ui/Screen';
+import { SocialIcon } from '@/components/ui/SocialIcon';
 import { useAuth } from '@/context/AuthContext';
 import { getApiError } from '@/lib/errors';
 import { useThemePalette } from '@/hooks/use-theme-palette';
@@ -138,16 +139,32 @@ export default function LoginScreen() {
 
       <View style={styles.socialButtons}>
         <Pressable 
-          style={[styles.socialButton, { backgroundColor: '#EA4335' }]}
+          style={({ pressed }) => [
+            styles.socialButton,
+            {
+              backgroundColor: '#FFFFFF',
+              borderColor: '#E5E7EB',
+              borderWidth: 1.5,
+            },
+            pressed && { opacity: 0.8 },
+          ]}
           onPress={() => {}}
         >
-          <Ionicons name="logo-google" size={24} color="#fff" />
+          <SocialIcon provider="google" size={24} />
         </Pressable>
         <Pressable 
-          style={[styles.socialButton, { backgroundColor: '#000' }]}
+          style={({ pressed }) => [
+            styles.socialButton,
+            {
+              backgroundColor: '#FFFFFF',
+              borderColor: '#E5E7EB',
+              borderWidth: 1.5,
+            },
+            pressed && { opacity: 0.8 },
+          ]}
           onPress={() => {}}
         >
-          <Ionicons name="logo-apple" size={24} color="#fff" />
+          <SocialIcon provider="apple" size={24} color="#000000" />
         </Pressable>
       </View>
 
@@ -260,6 +277,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
+    borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useThemePalette } from '@/hooks/use-theme-palette';
 import { useResetPassword } from '@/hooks/useResetPassword';
+import { SocialIcon } from '@/components/ui/SocialIcon';
 
 import { styles } from '../../styles/reset-password.styles';
 
@@ -326,20 +327,28 @@ export default function ResetPasswordScreen() {
               <Pressable
                 style={({ pressed }) => [
                   styles.socialButton,
-                  { backgroundColor: '#EA4335' },
-                  pressed && { opacity: 0.85 },
+                  {
+                    backgroundColor: '#FFFFFF',
+                    borderColor: '#E5E7EB',
+                    borderWidth: 1.5,
+                  },
+                  pressed && { opacity: 0.8 },
                 ]}
                 onPress={() => {}}>
-                <Ionicons name="logo-google" size={22} color="#fff" />
+                <SocialIcon provider="google" size={24} />
               </Pressable>
               <Pressable
                 style={({ pressed }) => [
                   styles.socialButton,
-                  { backgroundColor: '#000' },
-                  pressed && { opacity: 0.85 },
+                  {
+                    backgroundColor: '#FFFFFF',
+                    borderColor: '#E5E7EB',
+                    borderWidth: 1.5,
+                  },
+                  pressed && { opacity: 0.8 },
                 ]}
                 onPress={() => {}}>
-                <Ionicons name="logo-apple" size={22} color="#fff" />
+                <SocialIcon provider="apple" size={24} color="#000000" />
               </Pressable>
             </View>
 
