@@ -19,10 +19,12 @@ export default function RegisterCodeScreen() {
   const [code, setCode] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // The back button and the system back gesture/button both call router.back(),
   // which returns to the previous step (email screen) in the navigation stack.
@@ -71,6 +73,10 @@ export default function RegisterCodeScreen() {
       setError('Пароль — минимум 6 символов');
       return;
     }
+    if (confirmPassword !== password) {
+      setError('Пароли не совпадают');
+      return;
+    }
     setLoading(true);
     try {
       await signUp(email, code.trim(), username.trim(), password);
@@ -98,12 +104,12 @@ export default function RegisterCodeScreen() {
         </Text>
       </View>
 
-      <View style={styles.form}>
+      <View style={styles.card}>
         <View style={styles.inputWrapper}>
           <Ionicons 
             name="checkmark-done" 
             size={20} 
-            color={p.textMuted} 
+            color="#999999" 
             style={styles.inputIcon} 
           />
           <AuthInput
@@ -116,11 +122,13 @@ export default function RegisterCodeScreen() {
           />
         </View>
 
+        <View style={styles.divider} />
+
         <View style={styles.inputWrapper}>
           <Ionicons 
             name="person-outline" 
             size={20} 
-            color={p.textMuted} 
+            color="#999999" 
             style={styles.inputIcon} 
           />
           <AuthInput
@@ -132,15 +140,17 @@ export default function RegisterCodeScreen() {
           />
         </View>
 
+        <View style={styles.divider} />
+
         <View style={styles.inputWrapper}>
           <Ionicons 
             name="lock-closed-outline" 
             size={20} 
-            color={p.textMuted} 
+            color="#999999" 
             style={styles.inputIcon} 
           />
           <AuthInput
-            placeholder="Пароль (минимум 6 символов)"
+            placeholder="Пароль"
             value={password}
             onChangeText={setPassword}
             secureTextEntry={!showPassword}
@@ -154,7 +164,36 @@ export default function RegisterCodeScreen() {
             <Ionicons 
               name={showPassword ? "eye-outline" : "eye-off-outline"} 
               size={20} 
-              color={p.textMuted} 
+              color="#999999" 
+            />
+          </Pressable>
+        </View>
+
+        <View style={styles.divider} />
+
+        <View style={styles.inputWrapper}>
+          <Ionicons 
+            name="lock-closed-outline" 
+            size={20} 
+            color="#999999" 
+            style={styles.inputIcon} 
+          />
+          <AuthInput
+            placeholder="Повторите пароль"
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            secureTextEntry={!showConfirmPassword}
+            autoComplete="new-password"
+            style={styles.inputWithIcon}
+          />
+          <Pressable 
+            onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+            style={styles.eyeIcon}
+          >
+            <Ionicons 
+              name={showConfirmPassword ? "eye-outline" : "eye-off-outline"} 
+              size={20} 
+              color="#999999" 
             />
           </Pressable>
         </View>
@@ -166,6 +205,7 @@ export default function RegisterCodeScreen() {
         title={loading ? 'Создание аккаунта…' : 'Создать аккаунт'}
         onPress={onRegister}
         loading={loading}
+        variant="light"
         style={styles.mainButton}
       />
 
@@ -207,8 +247,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
   },
-  form: {
-    gap: 20,
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#E0E0E0',
     marginBottom: 16,
   },
   inputWrapper: {
@@ -227,6 +270,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 16,
     padding: 4,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#EEEEEE',
+    marginLeft: 52,
   },
   error: {
     textAlign: 'center',

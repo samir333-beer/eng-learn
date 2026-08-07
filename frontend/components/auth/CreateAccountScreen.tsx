@@ -309,8 +309,8 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#EEEEEE',
+    borderWidth: 1.5,
+    borderColor: '#E0E0E0',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.07,
@@ -379,13 +379,13 @@ const styles = StyleSheet.create({
     marginTop: 28,
     paddingVertical: 16,
     borderRadius: 12,
-    backgroundColor: '#6C63FF',
+    backgroundColor: '#E8E8E8',
     alignItems: 'center',
     justifyContent: 'center',
   },
   buttonText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#333333',
   },
 });
