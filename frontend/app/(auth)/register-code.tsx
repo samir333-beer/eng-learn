@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { BackHandler, StyleSheet, Text, View, Pressable } from 'react-native';
+import { ActivityIndicator, BackHandler, StyleSheet, Text, View, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { AuthInput } from '@/components/auth/AuthInput';
@@ -88,7 +88,7 @@ export default function RegisterCodeScreen() {
   };
 
   return (
-    <Screen scroll style={styles.container}>
+    <Screen scroll style={styles.container} glow={false}>
       <Pressable 
         onPress={handleBack}
         style={styles.backButton}
@@ -205,17 +205,23 @@ export default function RegisterCodeScreen() {
         title={loading ? 'Создание аккаунта…' : 'Создать аккаунт'}
         onPress={onRegister}
         loading={loading}
-        variant="light"
+        variant="primary"
         style={styles.mainButton}
       />
 
-      <AppButton
-        title="Отправить код снова"
-        variant="ghost"
+      <Pressable
         onPress={onResendCode}
-        loading={resending}
+        disabled={resending}
         style={styles.secondaryButton}
-      />
+      >
+        {resending ? (
+          <ActivityIndicator color={p.primary} />
+        ) : (
+          <Text style={[styles.secondaryButtonText, { color: p.textMuted }]}>
+            Отправить код снова
+          </Text>
+        )}
+      </Pressable>
     </Screen>
   );
 }
@@ -248,10 +254,8 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F2F3F5',
     borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: '#E0E0E0',
     marginBottom: 16,
   },
   inputWrapper: {
@@ -287,5 +291,11 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     marginBottom: 24,
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  secondaryButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
