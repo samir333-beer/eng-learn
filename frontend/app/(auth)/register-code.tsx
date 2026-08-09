@@ -119,7 +119,7 @@ export default function RegisterCodeScreen() {
             keyboardType="number-pad"
             maxLength={6}
             noBorder
-            style={[styles.inputWithIcon, { paddingVertical: 14, minHeight: 58 }]}
+            style={[styles.inputWithIcon, { paddingVertical: 14, minHeight: 58, backgroundColor: 'transparent' }]}
           />
         </View>
 
@@ -138,7 +138,7 @@ export default function RegisterCodeScreen() {
             onChangeText={setUsername}
             autoComplete="username"
             noBorder
-            style={[styles.inputWithIcon, { paddingVertical: 14, minHeight: 58 }]}
+            style={[styles.inputWithIcon, { paddingVertical: 14, minHeight: 58, backgroundColor: 'transparent' }]}
           />
         </View>
 
@@ -158,7 +158,7 @@ export default function RegisterCodeScreen() {
             secureTextEntry={!showPassword}
             autoComplete="new-password"
             noBorder
-            style={[styles.inputWithIcon, { paddingVertical: 14, minHeight: 58 }]}
+            style={[styles.inputWithIcon, { paddingVertical: 14, minHeight: 58, backgroundColor: 'transparent' }]}
           />
           <Pressable 
             onPress={() => setShowPassword(!showPassword)}
@@ -188,7 +188,7 @@ export default function RegisterCodeScreen() {
             secureTextEntry={!showConfirmPassword}
             autoComplete="new-password"
             noBorder
-            style={[styles.inputWithIcon, { paddingVertical: 14, minHeight: 58 }]}
+            style={[styles.inputWithIcon, { paddingVertical: 14, minHeight: 58, backgroundColor: 'transparent' }]}
           />
           <Pressable 
             onPress={() => setShowConfirmPassword(!showConfirmPassword)}
@@ -260,8 +260,11 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F3F4F6',
     borderRadius: 16,
+    paddingLeft: 28,
+    paddingRight: 16,
+    paddingVertical: 8,
     marginBottom: 16,
   },
   inputWrapper: {
@@ -271,11 +274,11 @@ const styles = StyleSheet.create({
   },
   inputIcon: {
     position: 'absolute',
-    left: 16,
+    left: 28,
     zIndex: 1,
   },
   inputWithIcon: {
-    paddingLeft: 48,
+    paddingLeft: 56,
   },
   eyeIcon: {
     position: 'absolute',
@@ -285,7 +288,7 @@ const styles = StyleSheet.create({
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: '#E5E7EB',
-    marginLeft: 52,
+    marginLeft: 60,
   },
   error: {
     textAlign: 'center',
