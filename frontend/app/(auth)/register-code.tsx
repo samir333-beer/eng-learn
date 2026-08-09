@@ -118,6 +118,7 @@ export default function RegisterCodeScreen() {
             onChangeText={setCode}
             keyboardType="number-pad"
             maxLength={6}
+            noBorder
             style={styles.inputWithIcon}
           />
         </View>

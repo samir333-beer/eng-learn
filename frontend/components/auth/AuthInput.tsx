@@ -2,7 +2,11 @@ import { StyleSheet, TextInput, type TextInputProps } from 'react-native';
 
 import { useThemePalette } from '@/hooks/use-theme-palette';
 
-export function AuthInput(props: TextInputProps) {
+type Props = TextInputProps & {
+  noBorder?: boolean;
+};
+
+export function AuthInput({ noBorder, style, ...props }: Props) {
   const p = useThemePalette();
   return (
     <TextInput
@@ -16,8 +20,9 @@ export function AuthInput(props: TextInputProps) {
           backgroundColor: p.card,
           borderColor: p.border,
           color: p.text,
+          ...(noBorder && styles.noBorder),
         },
-        props.style,
+        style,
       ]}
     />
   );
@@ -31,5 +36,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     fontSize: 15,
     fontWeight: '500',
+  },
+  noBorder: {
+    borderWidth: 0,
   },
 });
