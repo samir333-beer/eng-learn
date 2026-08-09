@@ -16,6 +16,8 @@ type Props = {
   variant?: 'primary' | 'ghost' | 'danger' | 'light';
   style?: ViewStyle;
   disabled?: boolean;
+  gradientColors?: readonly [string, string, ...string[]];
+  buttonRadius?: number;
 };
 
 export function AppButton({
@@ -25,6 +27,8 @@ export function AppButton({
   variant = 'primary',
   style,
   disabled,
+  gradientColors,
+  buttonRadius = 16,
 }: Props) {
   const p = useThemePalette();
 
@@ -35,14 +39,15 @@ export function AppButton({
         disabled={disabled || loading}
         style={({ pressed }) => [
           styles.wrap,
+          { borderRadius: buttonRadius },
           style,
           (pressed || disabled) && { opacity: 0.85 },
         ]}>
         <LinearGradient
-          colors={[...p.gradient]}
+          colors={gradientColors ? gradientColors : p.gradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.gradient}>
+          style={[styles.gradient, { borderRadius: buttonRadius }]}>
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (

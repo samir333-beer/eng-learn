@@ -207,6 +207,8 @@ export default function RegisterCodeScreen() {
         onPress={onRegister}
         loading={loading}
         variant="primary"
+        gradientColors={['#7C8CF8', '#A78BFA', '#F472B6']}
+        buttonRadius={12}
         style={styles.mainButton}
       />
 
@@ -255,13 +257,14 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   card: {
-    backgroundColor: '#F2F3F5',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     marginBottom: 16,
   },
   inputWrapper: {
     position: 'relative',
     justifyContent: 'center',
+    paddingVertical: 16,
   },
   inputIcon: {
     position: 'absolute',
@@ -278,7 +281,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: '#EEEEEE',
+    backgroundColor: '#E5E7EB',
     marginLeft: 52,
   },
   error: {
@@ -289,6 +292,7 @@ const styles = StyleSheet.create({
   },
   mainButton: {
     marginBottom: 12,
+    borderRadius: 12,
   },
   secondaryButton: {
     marginBottom: 24,
