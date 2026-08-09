@@ -108,7 +108,7 @@ export default function RegisterCodeScreen() {
         <View style={styles.inputWrapper}>
           <Ionicons 
             name="checkmark-done" 
-            size={20} 
+            size={18} 
             color="#999999" 
             style={styles.inputIcon} 
           />
@@ -118,7 +118,7 @@ export default function RegisterCodeScreen() {
             onChangeText={setCode}
             keyboardType="number-pad"
             maxLength={6}
-            noBorder
+            flat
             style={styles.inputWithIcon}
           />
         </View>
@@ -137,6 +137,7 @@ export default function RegisterCodeScreen() {
             value={username}
             onChangeText={setUsername}
             autoComplete="username"
+            flat
             style={styles.inputWithIcon}
           />
         </View>
@@ -156,6 +157,7 @@ export default function RegisterCodeScreen() {
             onChangeText={setPassword}
             secureTextEntry={!showPassword}
             autoComplete="new-password"
+            flat
             style={styles.inputWithIcon}
           />
           <Pressable 
@@ -185,6 +187,7 @@ export default function RegisterCodeScreen() {
             onChangeText={setConfirmPassword}
             secureTextEntry={!showConfirmPassword}
             autoComplete="new-password"
+            flat
             style={styles.inputWithIcon}
           />
           <Pressable 

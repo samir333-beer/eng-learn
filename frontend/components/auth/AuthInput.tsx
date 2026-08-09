@@ -4,9 +4,10 @@ import { useThemePalette } from '@/hooks/use-theme-palette';
 
 type Props = TextInputProps & {
   noBorder?: boolean;
+  flat?: boolean;
 };
 
-export function AuthInput({ noBorder, style, ...props }: Props) {
+export function AuthInput({ noBorder, flat, style, ...props }: Props) {
   const p = useThemePalette();
   return (
     <TextInput
@@ -21,6 +22,7 @@ export function AuthInput({ noBorder, style, ...props }: Props) {
           borderColor: p.border,
           color: p.text,
           ...(noBorder && styles.noBorder),
+          ...(flat && styles.flat),
         },
         style,
       ]}
@@ -39,5 +41,13 @@ const styles = StyleSheet.create({
   },
   noBorder: {
     borderWidth: 0,
+  },
+  flat: {
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    borderRadius: 0,
+    paddingHorizontal: 0,
   },
 });
