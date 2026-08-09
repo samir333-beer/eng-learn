@@ -118,8 +118,8 @@ export default function RegisterCodeScreen() {
             onChangeText={setCode}
             keyboardType="number-pad"
             maxLength={6}
-            flat
-            style={styles.inputWithIcon}
+            noBorder
+            style={[styles.inputWithIcon, { paddingVertical: 14, minHeight: 58 }]}
           />
         </View>
 
@@ -137,8 +137,8 @@ export default function RegisterCodeScreen() {
             value={username}
             onChangeText={setUsername}
             autoComplete="username"
-            flat
-            style={styles.inputWithIcon}
+            noBorder
+            style={[styles.inputWithIcon, { paddingVertical: 14, minHeight: 58 }]}
           />
         </View>
 
@@ -157,8 +157,8 @@ export default function RegisterCodeScreen() {
             onChangeText={setPassword}
             secureTextEntry={!showPassword}
             autoComplete="new-password"
-            flat
-            style={styles.inputWithIcon}
+            noBorder
+            style={[styles.inputWithIcon, { paddingVertical: 14, minHeight: 58 }]}
           />
           <Pressable 
             onPress={() => setShowPassword(!showPassword)}
@@ -187,8 +187,8 @@ export default function RegisterCodeScreen() {
             onChangeText={setConfirmPassword}
             secureTextEntry={!showConfirmPassword}
             autoComplete="new-password"
-            flat
-            style={styles.inputWithIcon}
+            noBorder
+            style={[styles.inputWithIcon, { paddingVertical: 14, minHeight: 58 }]}
           />
           <Pressable 
             onPress={() => setShowConfirmPassword(!showConfirmPassword)}
@@ -267,7 +267,7 @@ const styles = StyleSheet.create({
   inputWrapper: {
     position: 'relative',
     justifyContent: 'center',
-    paddingVertical: 16,
+    paddingVertical: 0,
   },
   inputIcon: {
     position: 'absolute',

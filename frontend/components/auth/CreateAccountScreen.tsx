@@ -58,6 +58,7 @@ function FieldRow({
           keyboardType={keyboardType}
           maxLength={maxLength}
           autoCapitalize={autoCapitalize}
+          underlineColorAndroid="transparent"
         />
         {onToggleSecure ? (
           <TouchableOpacity
@@ -309,8 +310,6 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: '#E0E0E0',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.07,
