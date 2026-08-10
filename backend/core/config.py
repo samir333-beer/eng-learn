@@ -23,7 +23,7 @@ class Settings:
             os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "10080")
         )
         self.algorithm: str = "HS256"
-        self.code_expire_minutes: int = int(os.getenv("CODE_EXPIRE_MINUTES", "10"))
+        self.code_expire_minutes: int = int(os.getenv("CODE_EXPIRE_MINUTES", "5"))
         self.smtp_host: str = os.getenv("SMTP_HOST", "smtp.gmail.com")
         self.smtp_port: int = int(os.getenv("SMTP_PORT", "587"))
         self.smtp_email: str = os.getenv("SMTP_EMAIL", "")

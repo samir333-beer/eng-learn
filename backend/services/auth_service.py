@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
@@ -8,6 +9,17 @@ from core.security import hash_password, verify_password
 from models.email_code import EmailCode
 from models.user import User
 from services.email_service import send_verification_email
+
+MAX_CODE_ATTEMPTS = 5
+
+
+@dataclass
+class VerifyResult:
+    """Result of an instant code validation (brute-force protected)."""
+
+    ok: bool
+    http_status: int = 400
+    message: str = ""
 
 
 def normalize_email(email: str) -> str:
@@ -98,6 +110,56 @@ def verify_email_code(db: Session, email: str, code: str, purpose: str) -> bool:
     record.used = True
     db.commit()
     return True
+
+
+def check_code_with_attempts(
+    db: Session, email: str, code: str, purpose: str
+) -> VerifyResult:
+    """Instant code validation with brute-force protection and TTL.
+
+    Unlike :func:`verify_email_code`, a successful check does NOT mark the
+    code as used, so the final register/login step can still consume it.
+    Failed attempts are counted per code record; after MAX_CODE_ATTEMPTS
+    failures the code is locked until a new code is requested.
+    """
+    email_norm = normalize_email(email)
+    now = datetime.now(timezone.utc)
+    record = (
+        db.query(EmailCode)
+        .filter(
+            EmailCode.email == email_norm,
+            EmailCode.purpose == purpose,
+            EmailCode.used.is_(False),
+        )
+        .order_by(EmailCode.created_at.desc())
+        .first()
+    )
+    if not record:
+        return VerifyResult(False, 400, "Код не найден. Запросите новый код.")
+
+    if record.failed_attempts >= MAX_CODE_ATTEMPTS:
+        return VerifyResult(
+            False, 429, "Слишком много неверных попыток. Запросите новый код."
+        )
+
+    if record.expires_at <= now:
+        return VerifyResult(
+            False, 400, "Код истёк (действует 5 минут). Запросите новый код."
+        )
+
+    if not verify_code(code, record.code_hash):
+        record.failed_attempts += 1
+        db.commit()
+        attempts_left = MAX_CODE_ATTEMPTS - record.failed_attempts
+        if attempts_left <= 0:
+            return VerifyResult(
+                False, 429, "Слишком много неверных попыток. Запросите новый код."
+            )
+        return VerifyResult(
+            False, 400, f"Неверный код. Осталось попыток: {attempts_left}"
+        )
+
+    return VerifyResult(ok=True)
 
 
 def reset_password(db: Session, email: str, code: str, new_password: str) -> bool:

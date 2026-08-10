@@ -19,3 +19,4 @@ class EmailCode(Base):
         default=lambda: datetime.now(timezone.utc),
     )
     used: Mapped[bool] = mapped_column(default=False)
+    failed_attempts: Mapped[int] = mapped_column(default=0)

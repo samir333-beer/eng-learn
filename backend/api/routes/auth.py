@@ -17,9 +17,12 @@ from schemas.auth import (
     SendCodeRequest,
     TokenResponse,
     UserResponse,
+    VerifyCodeRequest,
+    VerifyCodeResponse,
 )
 from services.auth_service import (
     authenticate_email_password,
+    check_code_with_attempts,
     create_user_with_email,
     get_user_by_email,
     get_user_by_username,
@@ -158,3 +161,23 @@ def login_password(
 @router.get("/me", response_model=UserResponse)
 def me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+verify_router = APIRouter(prefix="/api", tags=["auth"])
+
+
+@verify_router.post("/verify-code", response_model=VerifyCodeResponse)
+@limiter.limit("30/minute")
+def verify_code_instant(
+    request: Request, data: VerifyCodeRequest, db: Session = Depends(get_db)
+):
+    """Instant 6-digit registration code validation with brute-force protection.
+
+    - HTTP 200 ``{"status": "success"}`` — код корректен и не истёк.
+    - HTTP 400 — код неверный/истёк/не найден.
+    - HTTP 429 — превышен лимит неверных попыток (5 на email).
+    """
+    result = check_code_with_attempts(db, data.email, data.code, purpose="register")
+    if not result.ok:
+        raise HTTPException(status_code=result.http_status, detail=result.message)
+    return VerifyCodeResponse(status="success")

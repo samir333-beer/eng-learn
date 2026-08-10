@@ -22,6 +22,14 @@ export async function sendEmailCode(
   return data;
 }
 
+export async function verifyRegistrationCode(email: string, code: string) {
+  const { data } = await apiClient.post<{ status: 'success' }>(
+    '/api/verify-code',
+    { email, code },
+  );
+  return data;
+}
+
 export async function registerWithEmail(
   email: string,
   code: string,

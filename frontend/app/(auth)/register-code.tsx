@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, BackHandler, StyleSheet, Text, View, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -7,9 +7,13 @@ import { AuthInput } from '@/components/auth/AuthInput';
 import { AppButton } from '@/components/ui/AppButton';
 import { Screen } from '@/components/ui/Screen';
 import { useAuth } from '@/context/AuthContext';
-import { sendEmailCode } from '@/lib/api/auth';
+import { sendEmailCode, verifyRegistrationCode } from '@/lib/api/auth';
 import { getApiError } from '@/lib/errors';
 import { useThemePalette } from '@/hooks/use-theme-palette';
+
+const PASSWORD_MIN_LENGTH = 6;
+
+type PasswordStatus = 'idle' | 'valid' | 'invalid';
 
 export default function RegisterCodeScreen() {
   const { signUp } = useAuth();
@@ -23,12 +27,12 @@ export default function RegisterCodeScreen() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordStatus, setPasswordStatus] = useState<PasswordStatus>('idle');
+  const [confirmPasswordStatus, setConfirmPasswordStatus] = useState<PasswordStatus>('idle');
+  const [codeStatus, setCodeStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [codeVerified, setCodeVerified] = useState(false);
+  const verifyRequestId = useRef(0);
 
-  // The back button and the system back gesture/button both call router.back(),
-  // which returns to the previous step (email screen) in the navigation stack.
-  // If there's no back history (e.g. deep link), fall back to the email step.
   const handleBack = () => {
     if (router.canGoBack()) {
       router.back();
@@ -37,18 +41,18 @@ export default function RegisterCodeScreen() {
     }
   };
 
-  // Intercept the Android system back button/gesture so it behaves identically
-  // to the UI back button — always router.back() to the previous step.
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       handleBack();
-      return true; // prevent default back navigation (would exit the app)
+      return true;
     });
     return () => subscription.remove();
   }, []);
 
   const onResendCode = async () => {
     setError('');
+    setCodeStatus('idle');
+    setCodeVerified(false);
     setResending(true);
     try {
       await sendEmailCode(email, 'register');
@@ -59,10 +63,80 @@ export default function RegisterCodeScreen() {
     }
   };
 
+  // Live password validation: обновляем иконки и рамки полей сразу при вводе.
+  // idle  — пустое поле (нейтральный серый цвет);
+  // valid — пароль ≥ 6 символов и пароли совпадают (зелёный);
+  // invalid — пароль слишком короткий или пароли не совпадают (красный).
+  const syncPasswordStatuses = useCallback((pass: string, confirm: string) => {
+    if (!pass) {
+      setPasswordStatus('idle');
+    } else if (pass.length < PASSWORD_MIN_LENGTH || (confirm.length > 0 && confirm !== pass)) {
+      setPasswordStatus('invalid');
+    } else {
+      setPasswordStatus('valid');
+    }
+
+    if (!confirm) {
+      setConfirmPasswordStatus('idle');
+    } else if (confirm !== pass || pass.length < PASSWORD_MIN_LENGTH) {
+      setConfirmPasswordStatus('invalid');
+    } else {
+      setConfirmPasswordStatus('valid');
+    }
+  }, []);
+
+  const handlePasswordChange = (text: string) => {
+    setPassword(text);
+    setError('');
+    syncPasswordStatuses(text, confirmPassword);
+  };
+
+  const handleConfirmPasswordChange = (text: string) => {
+    setConfirmPassword(text);
+    setError('');
+    syncPasswordStatuses(password, text);
+  };
+
+  // Instant validation: отправляем код на проверку сразу после ввода 6 цифр,
+  // без нажатия каких-либо кнопок.
+  const handleCodeChange = useCallback(
+    (text: string) => {
+      const digits = text.replace(/\D/g, '').slice(0, 6);
+      setCode(digits);
+      setError('');
+      if (!email) return;
+
+      const requestId = ++verifyRequestId.current;
+
+      if (digits.length === 6) {
+        setCodeStatus('loading');
+        setCodeVerified(false);
+        verifyRegistrationCode(email, digits)
+          .then(() => {
+            if (verifyRequestId.current !== requestId) return;
+            setCodeStatus('success');
+            setCodeVerified(true);
+          })
+          .catch((err) => {
+            if (verifyRequestId.current !== requestId) return;
+            setCodeStatus('error');
+            setCodeVerified(false);
+            setError(getApiError(err, 'Проверьте код и попробуйте ещё раз.'));
+          });
+      } else {
+        // Меньше 6 цифр — сбрасываем статус и отменяем «висящий» запрос.
+        setCodeStatus('idle');
+        setCodeVerified(false);
+      }
+    },
+    [email],
+  );
+
   const onRegister = async () => {
     setError('');
-    if (code.trim().length < 6) {
-      setError('Введите 6-значный код из письма');
+    syncPasswordStatuses(password, confirmPassword);
+    if (!codeVerified || code.trim().length !== 6) {
+      setError('Сначала введите и подтвердите код из письма');
       return;
     }
     if (username.trim().length < 3) {
@@ -105,101 +179,118 @@ export default function RegisterCodeScreen() {
       </View>
 
       <View style={styles.card}>
-        <View style={styles.inputWrapper}>
-          <Ionicons 
-            name="checkmark-done" 
-            size={18} 
-            color="#999999" 
-            style={styles.inputIcon} 
-          />
+        <View style={styles.fieldRow}>
+          {codeStatus === 'loading' ? (
+            <ActivityIndicator size="small" color="#10b981" style={styles.fieldIcon} />
+          ) : (
+            <Ionicons
+              name={codeStatus === 'success' ? 'checkmark-circle' : 'checkmark-circle-outline'}
+              size={22}
+              color={codeStatus === 'success' ? '#10b981' : '#94a3b8'}
+              style={styles.fieldIcon}
+            />
+          )}
           <AuthInput
             placeholder="Код из письма"
             value={code}
-            onChangeText={setCode}
+            onChangeText={handleCodeChange}
             keyboardType="number-pad"
             maxLength={6}
             noBorder
-            style={[styles.inputWithIcon, { paddingVertical: 14, minHeight: 58, backgroundColor: 'transparent' }]}
+            style={styles.inputWithIcon}
           />
         </View>
 
         <View style={styles.divider} />
 
-        <View style={styles.inputWrapper}>
-          <Ionicons 
-            name="person-outline" 
-            size={20} 
-            color="#999999" 
-            style={styles.inputIcon} 
-          />
+        <View style={styles.fieldRow}>
+          <Ionicons name="person-outline" size={20} color="#999999" style={styles.fieldIcon} />
           <AuthInput
             placeholder="Имя пользователя"
             value={username}
             onChangeText={setUsername}
-            autoComplete="username"
+            autoCapitalize="words"
             noBorder
-            style={[styles.inputWithIcon, { paddingVertical: 14, minHeight: 58, backgroundColor: 'transparent' }]}
+            style={styles.inputWithIcon}
           />
         </View>
 
         <View style={styles.divider} />
 
-        <View style={styles.inputWrapper}>
-          <Ionicons 
-            name="lock-closed-outline" 
-            size={20} 
-            color="#999999" 
-            style={styles.inputIcon} 
-          />
+        <View
+          style={[
+            styles.fieldRow,
+            passwordStatus === 'valid' && styles.fieldValid,
+            passwordStatus === 'invalid' && styles.fieldInvalid,
+          ]}
+        >
+          <Ionicons name="lock-closed-outline" size={20} color="#999999" style={styles.fieldIcon} />
           <AuthInput
             placeholder="Пароль"
             value={password}
-            onChangeText={setPassword}
-            secureTextEntry={!showPassword}
+            onChangeText={handlePasswordChange}
+            secureTextEntry
             autoComplete="new-password"
             noBorder
-            style={[styles.inputWithIcon, { paddingVertical: 14, minHeight: 58, backgroundColor: 'transparent' }]}
+            style={styles.inputWithIcon}
           />
-          <Pressable 
-            onPress={() => setShowPassword(!showPassword)}
-            style={styles.eyeIcon}
-          >
-            <Ionicons 
-              name={showPassword ? "eye-outline" : "eye-off-outline"} 
-              size={20} 
-              color="#999999" 
-            />
-          </Pressable>
+          <Ionicons
+            name={
+              passwordStatus === 'valid'
+                ? 'checkmark-circle'
+                : passwordStatus === 'invalid'
+                  ? 'close-circle'
+                  : 'lock-closed-outline'
+            }
+            size={20}
+            color={
+              passwordStatus === 'valid'
+                ? '#10b981'
+                : passwordStatus === 'invalid'
+                  ? '#ef4444'
+                  : '#999999'
+            }
+            style={styles.statusIcon}
+          />
         </View>
 
         <View style={styles.divider} />
 
-        <View style={styles.inputWrapper}>
-          <Ionicons 
-            name="lock-closed-outline" 
-            size={20} 
-            color="#999999" 
-            style={styles.inputIcon} 
-          />
+        <View
+          style={[
+            styles.fieldRow,
+            confirmPasswordStatus === 'valid' && styles.fieldValid,
+            confirmPasswordStatus === 'invalid' && styles.fieldInvalid,
+          ]}
+        >
+          <Ionicons name="lock-closed-outline" size={20} color="#999999" style={styles.fieldIcon} />
           <AuthInput
             placeholder="Повторите пароль"
             value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            secureTextEntry={!showConfirmPassword}
+            onChangeText={handleConfirmPasswordChange}
+            secureTextEntry
             autoComplete="new-password"
             noBorder
-            style={[styles.inputWithIcon, { paddingVertical: 14, minHeight: 58, backgroundColor: 'transparent' }]}
+            style={styles.inputWithIcon}
           />
-          <Pressable 
-            onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-            style={styles.eyeIcon}
-          >
-            <Ionicons 
-              name={showConfirmPassword ? "eye-outline" : "eye-off-outline"} 
-              size={20} 
-              color="#999999" 
-            />
-          </Pressable>
+          <Ionicons
+            name={
+              confirmPasswordStatus === 'valid'
+                ? 'checkmark-circle'
+                : confirmPasswordStatus === 'invalid'
+                  ? 'close-circle'
+                  : 'lock-closed-outline'
+            }
+            size={20}
+            color={
+              confirmPasswordStatus === 'valid'
+                ? '#10b981'
+                : confirmPasswordStatus === 'invalid'
+                  ? '#ef4444'
+                  : '#999999'
+            }
+            style={styles.statusIcon}
+          />
         </View>
       </View>
 
@@ -209,6 +300,7 @@ export default function RegisterCodeScreen() {
         title={loading ? 'Создание аккаунта…' : 'Создать аккаунт'}
         onPress={onRegister}
         loading={loading}
+        disabled={!codeVerified}
         variant="primary"
         gradientColors={['#7C8CF8', '#A78BFA', '#F472B6']}
         buttonRadius={12}
@@ -262,33 +354,64 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: '#F3F4F6',
     borderRadius: 16,
-    paddingLeft: 28,
-    paddingRight: 16,
+    elevation: 5,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.07,
+    shadowRadius: 12,
     paddingVertical: 8,
-    marginBottom: 16,
   },
-  inputWrapper: {
-    position: 'relative',
+  fieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 58,
+    paddingHorizontal: 16,
+  },
+  fieldIcon: {
+    width: 24,
+    marginRight: 12,
+    textAlign: 'center',
+    color: '#999999',
+  },
+  successIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#10b981',
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 0,
-  },
-  inputIcon: {
-    position: 'absolute',
-    left: 28,
-    zIndex: 1,
+    marginRight: 12,
   },
   inputWithIcon: {
-    paddingLeft: 56,
+    flex: 1,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: '#222222',
+    backgroundColor: 'transparent',
   },
-  eyeIcon: {
-    position: 'absolute',
-    right: 16,
-    padding: 4,
+  fieldValid: {
+    borderWidth: 1.5,
+    borderColor: '#10b981',
+    borderRadius: 12,
+    marginHorizontal: 8,
+    marginVertical: 4,
+  },
+  fieldInvalid: {
+    borderWidth: 1.5,
+    borderColor: '#ef4444',
+    borderRadius: 12,
+    marginHorizontal: 8,
+    marginVertical: 4,
+  },
+  statusIcon: {
+    width: 24,
+    marginLeft: 4,
+    textAlign: 'center',
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: '#E5E7EB',
-    marginLeft: 60,
+    backgroundColor: '#94a3b8',
+    marginLeft: 52,
   },
   error: {
     textAlign: 'center',
@@ -297,10 +420,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   mainButton: {
+    marginTop: 20,
     marginBottom: 12,
     borderRadius: 12,
   },
   secondaryButton: {
+    marginTop: 20,
     marginBottom: 24,
     alignItems: 'center',
     paddingVertical: 12,

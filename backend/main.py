@@ -6,7 +6,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from api.routes import auth, leaderboard, phrases, progress, quiz, srs
-from api.routes.auth import limiter
+from api.routes.auth import limiter, verify_router
 from core.config import get_settings
 from db.init_db import init_database
 
@@ -25,6 +25,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(verify_router)
 app.include_router(phrases.router)
 app.include_router(progress.router)
 app.include_router(leaderboard.router)
