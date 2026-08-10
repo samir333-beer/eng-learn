@@ -1,9 +1,11 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, type Href } from 'expo-router';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HomeIllustration } from '@/components/learn/HomeIllustration';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useAuth } from '@/context/AuthContext';
 import { useThemePalette } from '@/hooks/use-theme-palette';
 
 type ModeCard = {
@@ -11,6 +13,7 @@ type ModeCard = {
   title: string;
   description: string;
   illustration: 'flashcards' | 'games';
+  emoji: string;
   route: '/flashcards' | '/(tabs)/practice';
 };
 
@@ -18,6 +21,9 @@ export default function HomeScreen() {
   const p = useThemePalette();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+
+  const firstName = (user?.username ?? 'друг').split(/[\s_@]/)[0];
 
   const cards: ModeCard[] = [
     {
@@ -25,6 +31,7 @@ export default function HomeScreen() {
       title: 'Флеш-карточки',
       description: 'Листай вверх и вниз, чтобы учить новые слова.',
       illustration: 'flashcards',
+      emoji: '🃏',
       route: '/flashcards',
     },
     {
@@ -32,6 +39,7 @@ export default function HomeScreen() {
       title: 'Мини-игры',
       description: 'Практикуйся и проверяй знания с удовольствием.',
       illustration: 'games',
+      emoji: '🎮',
       route: '/(tabs)/practice',
     },
   ];
@@ -46,7 +54,16 @@ export default function HomeScreen() {
       ]}>
       <HomeIllustration variant={item.illustration} />
       <View style={styles.cardContent}>
-        <Text style={[styles.cardTitle, { color: p.text }]}>{item.title}</Text>
+        <View style={styles.titleRow}>
+          <LinearGradient
+            colors={p.gradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.emojiBadge}>
+            <Text style={styles.emojiText}>{item.emoji}</Text>
+          </LinearGradient>
+          <Text style={[styles.cardTitle, { color: p.text }]}>{item.title}</Text>
+        </View>
         <Text style={[styles.cardDesc, { color: p.textMuted }]}>{item.description}</Text>
         <View style={styles.cardLink}>
           <Text style={[styles.cardLinkText, { color: p.primary }]}>Открыть</Text>
@@ -61,7 +78,9 @@ export default function HomeScreen() {
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View>
           <Text style={[styles.greeting, { color: p.textMuted }]}>Хаб обучения</Text>
-          <Text style={[styles.headerTitle, { color: p.text }]}>Обучение</Text>
+          <Text style={[styles.headerTitle, { color: p.text }]}>
+            Привет, {firstName}! 👋
+          </Text>
         </View>
         <Pressable
           onPress={() => router.push('/modal')}
@@ -138,9 +157,25 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 6,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  emojiBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emojiText: {
+    fontSize: 18,
+  },
   cardTitle: {
     fontSize: 20,
     fontWeight: '800',
+    flexShrink: 1,
   },
   cardDesc: {
     fontSize: 14,

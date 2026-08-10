@@ -1,3 +1,4 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, StyleSheet, Text, View } from 'react-native';
 
@@ -41,16 +42,36 @@ export default function ProfileScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={p.primary} />
       }>
       <Text style={[styles.title, { color: p.text }]}>Профиль</Text>
-      <Text style={[styles.email, { color: p.textMuted }]}>{user?.email}</Text>
-      <Text style={[styles.user, { color: p.text }]}>@{user?.username}</Text>
+
+      <View style={[styles.hero, { backgroundColor: p.card, borderColor: p.border }]}>
+        <LinearGradient
+          colors={p.gradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.avatar}>
+          <Text style={styles.avatarText}>
+            {(user?.username?.[0] ?? '?').toUpperCase()}
+          </Text>
+        </LinearGradient>
+        <View style={styles.heroInfo}>
+          <Text style={[styles.user, { color: p.text }]}>@{user?.username}</Text>
+          <Text style={[styles.email, { color: p.textMuted }]}>{user?.email}</Text>
+          {stats ? (
+            <Text style={[styles.heroStreak, { color: p.primary }]}>
+              🔥 {stats.streak_days} дней подряд
+            </Text>
+          ) : null}
+        </View>
+      </View>
 
       <View style={styles.grid}>
-        <StatCard label="Выучено" value={stats?.phrases_learned ?? '—'} />
-        <StatCard label="Просмотров" value={stats?.total_views ?? '—'} />
+        <StatCard label="Выучено" value={stats?.phrases_learned ?? '—'} icon="✅" />
+        <StatCard label="Просмотров" value={stats?.total_views ?? '—'} icon="👀" />
         <StatCard
           label="Прогресс"
           value={stats ? `${stats.progress_percent}%` : '—'}
-          accent={p.accent}
+          icon="📈"
+          highlight
         />
         <StatCard
           label="Время в приложении"
@@ -59,6 +80,7 @@ export default function ProfileScreen() {
               ? `${Math.floor(stats.study_time_seconds / 60)} мин`
               : '—'
           }
+          icon="⏱️"
         />
         <StatCard
           label="Серия дней"
@@ -99,9 +121,28 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 28, fontWeight: '800', marginTop: 8 },
-  email: { fontSize: 14, marginTop: 4 },
-  user: { fontSize: 20, fontWeight: '700', marginBottom: 20 },
+  title: { fontSize: 28, fontWeight: '800', marginTop: 8, marginBottom: 16 },
+  hero: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginBottom: 20,
+  },
+  avatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: { color: '#fff', fontSize: 26, fontWeight: '800' },
+  heroInfo: { flex: 1, gap: 2 },
+  heroStreak: { fontSize: 13, fontWeight: '700', marginTop: 4 },
+  email: { fontSize: 14 },
+  user: { fontSize: 20, fontWeight: '700' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   block: {
     marginTop: 24,

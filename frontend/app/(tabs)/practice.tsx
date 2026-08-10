@@ -1,3 +1,4 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Speech from 'expo-speech';
@@ -102,6 +103,18 @@ export default function PracticeScreen() {
         Вопрос {index + 1} из {questions.length} · Счёт: {score}
       </Text>
 
+      <View style={[styles.progressTrack, { backgroundColor: p.border }]}>
+        <LinearGradient
+          colors={p.gradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={[
+            styles.progressFill,
+            { width: `${((index + (selected !== null ? 1 : 0)) / questions.length) * 100}%` },
+          ]}
+        />
+      </View>
+
       <View style={styles.levels}>
         {LEVELS.map((lvl) => {
           const active = level === lvl;
@@ -181,7 +194,14 @@ export default function PracticeScreen() {
 
 const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: '800', marginTop: 8 },
-  sub: { fontSize: 14, marginBottom: 12 },
+  sub: { fontSize: 14, marginBottom: 8 },
+  progressTrack: {
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  progressFill: { height: 8, borderRadius: 4 },
   levels: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
   chip: {
     paddingHorizontal: 12,

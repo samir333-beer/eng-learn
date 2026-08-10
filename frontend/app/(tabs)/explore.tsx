@@ -2,10 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import * as Speech from 'expo-speech';
 
 import { LevelBadge } from '@/components/ui/LevelBadge';
 import { Screen } from '@/components/ui/Screen';
@@ -107,13 +109,28 @@ export default function ExploreScreen() {
             ) : null
           }
           renderItem={({ item }) => (
-            <View style={[styles.item, { backgroundColor: p.card, borderColor: p.border }]}>
-              <View style={styles.row}>
-                <LevelBadge level={item.level} />
-                <Text style={{ color: p.textMuted, fontSize: 12 }}>{item.topic}</Text>
+            <View
+              style={[styles.item, { backgroundColor: p.card, borderColor: p.border }]}>
+              <View
+                style={[
+                  styles.accentBar,
+                  { backgroundColor: LevelColors[item.level] },
+                ]}
+              />
+              <View style={styles.itemBody}>
+                <View style={styles.row}>
+                  <LevelBadge level={item.level} />
+                  <Text style={{ color: p.textMuted, fontSize: 12 }}>{item.topic}</Text>
+                  <Pressable
+                    onPress={() => Speech.speak(item.en, { language: 'en-US' })}
+                    style={({ pressed }) => pressed && { opacity: 0.5 }}
+                    hitSlop={8}>
+                    <Text style={[styles.speak, { color: p.primary }]}>🔊</Text>
+                  </Pressable>
+                </View>
+                <Text style={[styles.en, { color: p.text }]}>{item.en}</Text>
+                <Text style={{ color: p.textMuted }}>{item.ru}</Text>
               </View>
-              <Text style={[styles.en, { color: p.text }]}>{item.en}</Text>
-              <Text style={{ color: p.textMuted }}>{item.ru}</Text>
             </View>
           )}
           ListEmptyComponent={
@@ -140,12 +157,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   item: {
-    padding: 16,
+    flexDirection: 'row',
     borderRadius: 16,
     borderWidth: 1,
     marginBottom: 10,
-    gap: 6,
+    overflow: 'hidden',
   },
+  accentBar: { width: 5 },
+  itemBody: { flex: 1, padding: 16, gap: 6 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  speak: { fontSize: 16, marginLeft: 4 },
   en: { fontSize: 16, fontWeight: '600' },
 });
