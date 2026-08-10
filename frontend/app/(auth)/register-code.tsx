@@ -29,6 +29,8 @@ export default function RegisterCodeScreen() {
   const [resending, setResending] = useState(false);
   const [passwordStatus, setPasswordStatus] = useState<PasswordStatus>('idle');
   const [confirmPasswordStatus, setConfirmPasswordStatus] = useState<PasswordStatus>('idle');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [codeStatus, setCodeStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [codeVerified, setCodeVerified] = useState(false);
   const verifyRequestId = useRef(0);
@@ -68,17 +70,37 @@ export default function RegisterCodeScreen() {
   // valid — пароль ≥ 6 символов и пароли совпадают (зелёный);
   // invalid — пароль слишком короткий или пароли не совпадают (красный).
   const syncPasswordStatuses = useCallback((pass: string, confirm: string) => {
-    if (!pass) {
+    // trim() обязателен: автозаполнение клавиатуры/пароля может добавить
+    // пробел в конец, и сравнение паролей без trim() ломается.
+    const trimmedPass = pass.trim();
+    const trimmedConfirm = confirm.trim();
+
+    console.log('[syncPasswordStatuses]', {
+      pass,
+      trimmedPass,
+      confirm,
+      trimmedConfirm,
+      passLength: trimmedPass.length,
+      confirmLength: trimmedConfirm.length,
+      minLength: PASSWORD_MIN_LENGTH,
+    });
+
+    // Пароль valid: длина >= минимума И (подтверждение пустое ИЛИ совпадает).
+    if (!trimmedPass) {
       setPasswordStatus('idle');
-    } else if (pass.length < PASSWORD_MIN_LENGTH || (confirm.length > 0 && confirm !== pass)) {
+    } else if (
+      trimmedPass.length < PASSWORD_MIN_LENGTH ||
+      (trimmedConfirm.length > 0 && trimmedConfirm !== trimmedPass)
+    ) {
       setPasswordStatus('invalid');
     } else {
       setPasswordStatus('valid');
     }
 
-    if (!confirm) {
+    // Подтверждение valid: только если непустое и совпадает с паролем.
+    if (!trimmedConfirm) {
       setConfirmPasswordStatus('idle');
-    } else if (confirm !== pass || pass.length < PASSWORD_MIN_LENGTH) {
+    } else if (trimmedConfirm !== trimmedPass) {
       setConfirmPasswordStatus('invalid');
     } else {
       setConfirmPasswordStatus('valid');
@@ -143,17 +165,20 @@ export default function RegisterCodeScreen() {
       setError('Имя — минимум 3 символа');
       return;
     }
-    if (password.length < 6) {
+    // trim() для сравнения и отправки — лишний пробел не должен ломать проверку.
+    const trimmedPassword = password.trim();
+    const trimmedConfirmPassword = confirmPassword.trim();
+    if (trimmedPassword.length < PASSWORD_MIN_LENGTH) {
       setError('Пароль — минимум 6 символов');
       return;
     }
-    if (confirmPassword !== password) {
+    if (trimmedConfirmPassword !== trimmedPassword) {
       setError('Пароли не совпадают');
       return;
     }
     setLoading(true);
     try {
-      await signUp(email, code.trim(), username.trim(), password);
+      await signUp(email, code.trim(), username.trim(), trimmedPassword);
     } catch (e) {
       setError(getApiError(e, 'Ошибка регистрации'));
     } finally {
@@ -184,9 +209,21 @@ export default function RegisterCodeScreen() {
             <ActivityIndicator size="small" color="#10b981" style={styles.fieldIcon} />
           ) : (
             <Ionicons
-              name={codeStatus === 'success' ? 'checkmark-circle' : 'checkmark-circle-outline'}
+              name={
+                codeStatus === 'success'
+                  ? 'checkmark-circle'
+                  : codeStatus === 'error'
+                  ? 'close-circle'
+                  : 'checkmark-circle-outline'
+              }
               size={22}
-              color={codeStatus === 'success' ? '#10b981' : '#94a3b8'}
+              color={
+                codeStatus === 'success'
+                  ? '#10b981'
+                  : codeStatus === 'error'
+                  ? '#ef4444'
+                  : '#94a3b8'
+              }
               style={styles.fieldIcon}
             />
           )}
@@ -224,34 +261,32 @@ export default function RegisterCodeScreen() {
             passwordStatus === 'invalid' && styles.fieldInvalid,
           ]}
         >
-          <Ionicons name="lock-closed-outline" size={20} color="#999999" style={styles.fieldIcon} />
+          <Ionicons
+            name={passwordStatus === 'valid' ? 'checkmark-circle' : 'checkmark-circle-outline'}
+            size={22}
+            color={passwordStatus === 'valid' ? '#10b981' : '#94a3b8'}
+            style={styles.fieldIcon}
+          />
           <AuthInput
             placeholder="Пароль"
             value={password}
             onChangeText={handlePasswordChange}
-            secureTextEntry
+            secureTextEntry={!showPassword}
             autoComplete="new-password"
             noBorder
             style={styles.inputWithIcon}
           />
-          <Ionicons
-            name={
-              passwordStatus === 'valid'
-                ? 'checkmark-circle'
-                : passwordStatus === 'invalid'
-                  ? 'close-circle'
-                  : 'lock-closed-outline'
-            }
-            size={20}
-            color={
-              passwordStatus === 'valid'
-                ? '#10b981'
-                : passwordStatus === 'invalid'
-                  ? '#ef4444'
-                  : '#999999'
-            }
-            style={styles.statusIcon}
-          />
+          <Pressable
+            onPress={() => setShowPassword(!showPassword)}
+            hitSlop={8}
+            style={styles.eyeIcon}
+          >
+            <Ionicons
+              name={showPassword ? 'eye-outline' : 'eye-off-outline'}
+              size={20}
+              color="#999999"
+            />
+          </Pressable>
         </View>
 
         <View style={styles.divider} />
@@ -263,34 +298,32 @@ export default function RegisterCodeScreen() {
             confirmPasswordStatus === 'invalid' && styles.fieldInvalid,
           ]}
         >
-          <Ionicons name="lock-closed-outline" size={20} color="#999999" style={styles.fieldIcon} />
+          <Ionicons
+            name={confirmPasswordStatus === 'valid' ? 'checkmark-circle' : 'checkmark-circle-outline'}
+            size={22}
+            color={confirmPasswordStatus === 'valid' ? '#10b981' : '#94a3b8'}
+            style={styles.fieldIcon}
+          />
           <AuthInput
             placeholder="Повторите пароль"
             value={confirmPassword}
             onChangeText={handleConfirmPasswordChange}
-            secureTextEntry
+            secureTextEntry={!showConfirmPassword}
             autoComplete="new-password"
             noBorder
             style={styles.inputWithIcon}
           />
-          <Ionicons
-            name={
-              confirmPasswordStatus === 'valid'
-                ? 'checkmark-circle'
-                : confirmPasswordStatus === 'invalid'
-                  ? 'close-circle'
-                  : 'lock-closed-outline'
-            }
-            size={20}
-            color={
-              confirmPasswordStatus === 'valid'
-                ? '#10b981'
-                : confirmPasswordStatus === 'invalid'
-                  ? '#ef4444'
-                  : '#999999'
-            }
-            style={styles.statusIcon}
-          />
+          <Pressable
+            onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+            hitSlop={8}
+            style={styles.eyeIcon}
+          >
+            <Ionicons
+              name={showConfirmPassword ? 'eye-outline' : 'eye-off-outline'}
+              size={20}
+              color="#999999"
+            />
+          </Pressable>
         </View>
       </View>
 
@@ -407,6 +440,11 @@ const styles = StyleSheet.create({
     width: 24,
     marginLeft: 4,
     textAlign: 'center',
+  },
+  eyeIcon: {
+    padding: 4,
+    marginLeft: 4,
+    justifyContent: 'center',
   },
   divider: {
     height: StyleSheet.hairlineWidth,

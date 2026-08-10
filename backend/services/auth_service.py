@@ -13,6 +13,20 @@ from services.email_service import send_verification_email
 MAX_CODE_ATTEMPTS = 5
 
 
+def _to_aware_utc(dt: datetime) -> datetime:
+    """Приводит дату к offset-aware UTC, если она naive.
+
+    SQLite не хранит таймзону: даже при DateTime(timezone=True) значения,
+    прочитанные из БД, возвращаются как naive. Поэтому перед сравнением с
+    datetime.now(timezone.utc) (aware) такие даты из БД нужно приводить к
+    aware — иначе Python выбросит TypeError:
+    "can't compare offset-naive and offset-aware datetimes".
+    """
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 @dataclass
 class VerifyResult:
     """Result of an instant code validation (brute-force protected)."""
@@ -100,12 +114,15 @@ def verify_email_code(db: Session, email: str, code: str, purpose: str) -> bool:
             EmailCode.email == email_norm,
             EmailCode.purpose == purpose,
             EmailCode.used.is_(False),
-            EmailCode.expires_at > now,
         )
         .order_by(EmailCode.created_at.desc())
         .first()
     )
-    if not record or not verify_code(code, record.code_hash):
+    if not record:
+        return False
+    if _to_aware_utc(record.expires_at) <= now:
+        return False
+    if not verify_code(code, record.code_hash):
         return False
     record.used = True
     db.commit()
@@ -142,7 +159,7 @@ def check_code_with_attempts(
             False, 429, "Слишком много неверных попыток. Запросите новый код."
         )
 
-    if record.expires_at <= now:
+    if _to_aware_utc(record.expires_at) <= now:
         return VerifyResult(
             False, 400, "Код истёк (действует 5 минут). Запросите новый код."
         )
