@@ -1,4 +1,5 @@
 import { useRouter, useSegments } from 'expo-router';
+import axios from 'axios';
 import React, {
   createContext,
   useCallback,
@@ -11,6 +12,7 @@ import React, {
 import {
   fetchMe,
   loginWithEmailCode,
+  loginWithGoogle,
   loginWithPassword,
   registerWithEmail,
   type User,
@@ -21,8 +23,10 @@ import { clearToken, loadToken, saveToken } from '@/lib/storage/token';
 type AuthContextValue = {
   user: User | null;
   isLoading: boolean;
+  sessionError: boolean;
   signInPassword: (email: string, password: string) => Promise<void>;
   signInCode: (email: string, code: string) => Promise<void>;
+  signInWithGoogle: (idToken: string) => Promise<void>;
   signUp: (
     email: string,
     code: string,
@@ -31,6 +35,7 @@ type AuthContextValue = {
   ) => Promise<void>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  retrySession: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -38,14 +43,24 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [sessionError, setSessionError] = useState(false);
   const router = useRouter();
   const segments = useSegments();
 
   const applyToken = useCallback(async (token: string) => {
     setAuthToken(token);
-    await saveToken(token);
-    const me = await fetchMe();
-    setUser(me);
+    try {
+      const me = await fetchMe();
+      await saveToken(token);
+      setUser(me);
+      setSessionError(false);
+    } catch (error) {
+      setAuthToken(null);
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        await clearToken();
+      }
+      throw error;
+    }
   }, []);
 
   useEffect(() => {
@@ -56,9 +71,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setAuthToken(token);
           setUser(await fetchMe());
         }
-      } catch {
-        await clearToken();
-        setAuthToken(null);
+        setSessionError(false);
+      } catch (error) {
+        if (axios.isAxiosError(error) && error.response?.status === 401) {
+          await clearToken();
+          setAuthToken(null);
+        } else {
+          setSessionError(true);
+        }
         setUser(null);
       } finally {
         setIsLoading(false);
@@ -69,9 +89,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isLoading) return;
     const inAuth = segments[0] === '(auth)';
-    if (!user && !inAuth) router.replace('/(auth)/login');
+    if (!user && !sessionError && !inAuth) router.replace('/(auth)/login');
     else if (user && inAuth) router.replace('/(tabs)');
-  }, [user, isLoading, segments, router]);
+  }, [user, isLoading, sessionError, segments, router]);
 
   const signInPassword = useCallback(
     async (email: string, password: string) => {
@@ -107,6 +127,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [applyToken],
   );
 
+  const signInWithGoogle = useCallback(
+    async (idToken: string) => {
+      const { access_token } = await loginWithGoogle(idToken);
+      await applyToken(access_token);
+    },
+    [applyToken],
+  );
+
   const signOut = useCallback(async () => {
     await clearToken();
     setAuthToken(null);
@@ -119,17 +147,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(await fetchMe());
   }, [user]);
 
+  const retrySession = useCallback(async () => {
+    setIsLoading(true);
+    setSessionError(false);
+    try {
+      const token = await loadToken();
+      if (!token) {
+        setUser(null);
+        return;
+      }
+      setAuthToken(token);
+      setUser(await fetchMe());
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        await clearToken();
+        setAuthToken(null);
+        setSessionError(false);
+      } else {
+        setSessionError(true);
+      }
+      setUser(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   const value = useMemo(
     () => ({
       user,
       isLoading,
+      sessionError,
       signInPassword,
       signInCode,
+      signInWithGoogle,
       signUp,
       signOut,
       refreshUser,
+      retrySession,
     }),
-    [user, isLoading, signInPassword, signInCode, signUp, signOut, refreshUser],
+    [
+      user,
+      isLoading,
+      sessionError,
+      signInPassword,
+      signInCode,
+      signInWithGoogle,
+      signUp,
+      signOut,
+      refreshUser,
+      retrySession,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

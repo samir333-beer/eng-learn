@@ -65,9 +65,15 @@ def get_review_session(
     db: Session, user_id: int, limit: int = 20
 ) -> SRSReviewResponse:
     """Собирает сессию повторения: due-карточки + новые."""
-    due = get_due_cards(db, user_id, limit=DAILY_REVIEW_LIMIT)
-    new_count = max(0, limit - len(due))
+    session_limit = max(1, min(limit, DAILY_REVIEW_LIMIT + DAILY_NEW_LIMIT))
+    due = get_due_cards(db, user_id, limit=min(session_limit, DAILY_REVIEW_LIMIT))
+    new_count = max(0, session_limit - len(due))
     new = get_new_cards(db, user_id, limit=min(new_count, DAILY_NEW_LIMIT))
+    if new:
+        # Новые карточки созданы через flush — фиксируем, чтобы они
+        # не потерялись при закрытии сессии запроса (иначе POST /srs/review
+        # не найдёт эти card_id).
+        db.commit()
 
     cards = due + new
     items = []

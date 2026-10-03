@@ -33,9 +33,15 @@ def send_verification_email(to_email: str, code: str, purpose: str) -> None:
     )
 
     if not settings.smtp_email or not settings.smtp_app_password:
-        logger.error(
-            "SMTP не настроен: задайте SMTP_EMAIL и SMTP_APP_PASSWORD в .env"
-        )
+        if settings.app_env != "production":
+            logger.warning(
+                "SMTP не настроен; код %s для %s (%s) выведен только для разработки",
+                code,
+                to_email,
+                purpose,
+            )
+            return
+        logger.error("SMTP не настроен в production")
         raise EmailSendError("SMTP не настроен")
 
     msg = MIMEText(body, "plain", "utf-8")

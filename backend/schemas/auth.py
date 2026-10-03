@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, EmailStr, Field
 
 
@@ -23,6 +25,10 @@ class EmailPasswordLogin(BaseModel):
     password: str
 
 
+class GoogleAuthRequest(BaseModel):
+    id_token: str
+
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
@@ -36,6 +42,8 @@ class ResetPasswordRequest(BaseModel):
 class VerifyCodeRequest(BaseModel):
     email: EmailStr
     code: str = Field(min_length=6, max_length=6)
+    # Без purpose запрос ведёт себя как раньше — проверка кода регистрации.
+    purpose: Literal["register", "reset"] = "register"
 
 
 class VerifyCodeResponse(BaseModel):

@@ -1,44 +1,52 @@
 This file is a merged representation of the entire codebase, combined into a single document by Repomix.
 
-# File Summary
+<file_summary>
+This section contains a summary of this file.
 
-## Purpose
+<purpose>
 This file contains a packed representation of the entire repository's contents.
 It is designed to be easily consumable by AI systems for analysis, code review,
 or other automated processes.
+</purpose>
 
-## File Format
+<file_format>
 The content is organized as follows:
 1. This summary section
 2. Repository information
 3. Directory structure
 4. Repository files (if enabled)
 5. Multiple file entries, each consisting of:
-  a. A header with the file path (## File: path/to/file)
-  b. The full contents of the file in a code block
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
 
-## Usage Guidelines
+<usage_guidelines>
 - This file should be treated as read-only. Any changes should be made to the
   original repository files, not this packed version.
 - When processing this file, use the file path to distinguish
   between different files in the repository.
 - Be aware that this file may contain sensitive information. Handle it with
   the same level of security as you would the original repository.
+</usage_guidelines>
 
-## Notes
+<notes>
 - Some files may have been excluded based on .gitignore rules and Repomix's configuration
 - Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
 - Files matching patterns in .gitignore are excluded
 - Files matching default ignore patterns are excluded
 - Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
 
-# Directory Structure
-````
+</file_summary>
+
+<directory_structure>
 app/
   (auth)/
     _layout.tsx
     login.tsx
+    register-code.tsx
     register.tsx
+    reset-password.tsx
   (tabs)/
     _layout.tsx
     cards.tsx
@@ -49,8 +57,10 @@ app/
     profile.tsx
     review.tsx
   _layout.tsx
+  flashcards.tsx
   index.tsx
   modal.tsx
+  oauthredirect.tsx
 assets/
   images/
     android-icon-background.png
@@ -65,20 +75,29 @@ assets/
     splash-icon.png
 components/
   auth/
+    AuthError.tsx
     AuthField.tsx
+    AuthFooterLink.tsx
     AuthHeader.tsx
-    AuthInput.tsx
+    AuthSocial.tsx
+    CreateAccountScreen.tsx
+    GoogleSignInButton.tsx
     SocialAuthRow.tsx
+    SocialIcon.tsx
   learn/
     FlashCard.tsx
+    HomeIllustration.tsx
     PhraseCard.tsx
   ui/
     AppButton.tsx
     collapsible.tsx
+    FadeIn.tsx
     icon-symbol.ios.tsx
     icon-symbol.tsx
     LevelBadge.tsx
+    ProgressRing.tsx
     Screen.tsx
+    SocialIcon.tsx
     StatCard.tsx
   external-link.tsx
   haptic-tab.tsx
@@ -92,11 +111,14 @@ constants/
   theme.ts
 context/
   AuthContext.tsx
+  WordsContext.tsx
 hooks/
   use-color-scheme.ts
   use-color-scheme.web.ts
   use-theme-color.ts
   use-theme-palette.ts
+  useGoogleAuth.ts
+  useResetPassword.ts
   useStudyTimer.ts
 lib/
   api/
@@ -110,15 +132,19 @@ lib/
   storage/
     token.ts
   errors.ts
+plugins/
+  withSingleTaskLaunchMode.js
 scripts/
   .env.example
   reset-project.js
+  start-dev.js
 .env.example
 .gitignore
 app.json
 BEFORE_AFTER_COMPARISON.md
 COMPLETE_CODE.md
 COMPLETION_CHECKLIST.md
+eas.json
 eslint.config.js
 FINAL_REPORT.md
 FRONTEND_UPDATES.md
@@ -126,12 +152,12 @@ package.json
 QUICK_REFERENCE.md
 README.md
 tsconfig.json
-````
+</directory_structure>
 
-# Files
+<files>
+This section contains the contents of the repository's files.
 
-## File: app/(auth)/_layout.tsx
-````typescript
+<file path="app/(auth)/_layout.tsx">
 import { Stack } from 'expo-router';
 
 export default function AuthLayout() {
@@ -139,34 +165,38 @@ export default function AuthLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="login" />
       <Stack.Screen name="register" />
+      <Stack.Screen name="register-code" />
+      <Stack.Screen name="reset-password" />
     </Stack>
   );
 }
-````
+</file>
 
-## File: app/(auth)/login.tsx
-````typescript
+<file path="app/(auth)/login.tsx">
 import { Link } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View, Pressable } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
-import { AuthInput } from '@/components/auth/AuthInput';
+import { AuthError } from '@/components/auth/AuthError';
+import { AuthField } from '@/components/auth/AuthField';
+import { AuthFooterLink } from '@/components/auth/AuthFooterLink';
+import { AuthHeader } from '@/components/auth/AuthHeader';
+import { AuthSocial } from '@/components/auth/AuthSocial';
 import { AppButton } from '@/components/ui/AppButton';
+import { FadeIn } from '@/components/ui/FadeIn';
 import { Screen } from '@/components/ui/Screen';
 import { useAuth } from '@/context/AuthContext';
 import { getApiError } from '@/lib/errors';
 import { useThemePalette } from '@/hooks/use-theme-palette';
 
 export default function LoginScreen() {
-  const { signInPassword, isLoading: authLoading } = useAuth();
+  const { signInPassword, signInWithGoogle, isLoading: authLoading } = useAuth();
   const p = useThemePalette();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const onSubmit = async () => {
     setError('');
@@ -180,6 +210,18 @@ export default function LoginScreen() {
     }
   };
 
+  const handleGoogleSuccess = async (idToken: string) => {
+    setError('');
+    setGoogleLoading(true);
+    try {
+      await signInWithGoogle(idToken);
+    } catch (e) {
+      setError(getApiError(e, 'Ошибка входа через Google'));
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
   if (authLoading) {
     return (
       <Screen>
@@ -189,282 +231,469 @@ export default function LoginScreen() {
   }
 
   return (
-    <Screen scroll style={styles.container}>
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: p.text }]}>Рады видеть снова! 👋</Text>
-        <Text style={[styles.subtitle, { color: p.textMuted }]}>
-          Войдите в свой аккаунт, чтобы продолжить
-        </Text>
-      </View>
+    <Screen scroll>
+      <FadeIn>
+        <AuthHeader
+          icon="log-in-outline"
+          title="С возвращением 👋"
+          subtitle="Войдите, чтобы продолжить обучение"
+        />
+      </FadeIn>
 
-      <View style={styles.form}>
-        <View style={styles.inputWrapper}>
-          <Ionicons 
-            name="mail-outline" 
-            size={20} 
-            color={p.textMuted} 
-            style={styles.inputIcon} 
-          />
-          <AuthInput
-            placeholder="Email адрес"
+      <FadeIn delay={100}>
+        <View style={styles.form}>
+          <AuthField
+            label="Email"
+            icon="mail-outline"
+            placeholder="you@example.com"
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
             autoComplete="email"
-            style={styles.inputWithIcon}
           />
-        </View>
 
-        <View style={styles.inputWrapper}>
-          <Ionicons 
-            name="lock-closed-outline" 
-            size={20} 
-            color={p.textMuted} 
-            style={styles.inputIcon} 
-          />
-          <AuthInput
-            placeholder="Пароль"
+          <AuthField
+            label="Пароль"
+            icon="lock-closed-outline"
+            placeholder="Ваш пароль"
             value={password}
             onChangeText={setPassword}
-            secureTextEntry={!showPassword}
+            secure
             autoComplete="password"
-            style={styles.inputWithIcon}
           />
-          <Pressable 
-            onPress={() => setShowPassword(!showPassword)}
-            style={styles.eyeIcon}
-          >
-            <Ionicons 
-              name={showPassword ? "eye-outline" : "eye-off-outline"} 
-              size={20} 
-              color={p.textMuted} 
-            />
-          </Pressable>
         </View>
 
-        <View style={styles.rememberRow}>
-          <Pressable 
-            onPress={() => setRememberMe(!rememberMe)}
-            style={styles.checkboxRow}
-          >
-            <View style={[
-              styles.checkbox, 
-              { borderColor: p.border },
-              rememberMe && { backgroundColor: p.primary, borderColor: p.primary }
-            ]}>
-              {rememberMe && (
-                <Ionicons name="checkmark" size={14} color="#fff" />
-              )}
-            </View>
-            <Text style={[styles.rememberText, { color: p.text }]}>
-              Запомнить меня
-            </Text>
-          </Pressable>
-
-          <Link href="/(auth)/register" style={[styles.forgotText, { color: p.primary }]}>
-            Забыли пароль?
-          </Link>
-        </View>
-      </View>
-
-      {error ? <Text style={[styles.error, { color: p.danger }]}>{error}</Text> : null}
-
-      <AppButton
-        title={submitting ? 'Вход…' : 'Войти'}
-        onPress={onSubmit}
-        loading={submitting}
-        style={styles.loginButton}
-      />
-
-      <View style={styles.dividerContainer}>
-        <View style={[styles.dividerLine, { backgroundColor: p.border }]} />
-        <Text style={[styles.dividerText, { color: p.textMuted }]}>
-          или войти через
-        </Text>
-        <View style={[styles.dividerLine, { backgroundColor: p.border }]} />
-      </View>
-
-      <View style={styles.socialButtons}>
-        <Pressable 
-          style={[styles.socialButton, { backgroundColor: '#EA4335' }]}
-          onPress={() => {}}
-        >
-          <Ionicons name="logo-google" size={24} color="#fff" />
-        </Pressable>
-        <Pressable 
-          style={[styles.socialButton, { backgroundColor: '#000' }]}
-          onPress={() => {}}
-        >
-          <Ionicons name="logo-apple" size={24} color="#fff" />
-        </Pressable>
-        <Pressable 
-          style={[styles.socialButton, { backgroundColor: '#0088cc' }]}
-          onPress={() => {}}
-        >
-          <Ionicons name="paper-plane" size={24} color="#fff" />
-        </Pressable>
-      </View>
-
-      <View style={styles.footer}>
-        <Text style={[styles.footerText, { color: p.textMuted }]}>
-          Еще нет аккаунта?{' '}
-        </Text>
-        <Link href="/(auth)/register" style={[styles.signupLink, { color: p.primary }]}>
-          Зарегистрироваться
+        <Link href="/(auth)/reset-password" style={[styles.forgotLink, { color: p.primary }]}>
+          Забыли пароль?
         </Link>
-      </View>
+
+        {error ? <AuthError message={error} /> : null}
+      </FadeIn>
+
+      <FadeIn delay={200}>
+        <AppButton
+          title={submitting ? 'Вход…' : 'Войти'}
+          onPress={onSubmit}
+          loading={submitting}
+          style={styles.submit}
+        />
+
+        <AuthSocial
+          onSuccess={handleGoogleSuccess}
+          loading={googleLoading}
+          dividerText="или войдите через"
+        />
+
+        <AuthFooterLink
+          text="Ещё нет аккаунта?"
+          linkText="Зарегистрироваться"
+          href="/(auth)/register"
+        />
+      </FadeIn>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    paddingTop: 40,
-  },
-  header: {
-    marginBottom: 40,
-  },
-  title: {
-    fontSize: 36,
-    fontWeight: '700',
-    marginBottom: 8,
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    fontSize: 16,
-    lineHeight: 24,
-  },
   form: {
     gap: 20,
-    marginBottom: 16,
+    marginBottom: 4,
   },
-  inputWrapper: {
-    position: 'relative',
-    justifyContent: 'center',
-  },
-  inputIcon: {
-    position: 'absolute',
-    left: 16,
-    zIndex: 1,
-  },
-  inputWithIcon: {
-    paddingLeft: 48,
-  },
-  eyeIcon: {
-    position: 'absolute',
-    right: 16,
-    padding: 4,
-  },
-  rememberRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  checkboxRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 5,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rememberText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  forgotText: {
+  forgotLink: {
+    alignSelf: 'flex-end',
     fontSize: 14,
     fontWeight: '600',
+    paddingVertical: 12,
+    marginBottom: 4,
   },
-  error: {
-    textAlign: 'center',
-    marginBottom: 16,
-    lineHeight: 20,
-    fontSize: 14,
-  },
-  loginButton: {
-    marginBottom: 24,
-  },
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 24,
-    gap: 12,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-  },
-  dividerText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  socialButtons: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 16,
-    marginBottom: 32,
-  },
-  socialButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  footerText: {
-    fontSize: 15,
-  },
-  signupLink: {
-    fontSize: 15,
-    fontWeight: '700',
+  submit: {
+    marginBottom: 28,
   },
 });
-````
+</file>
 
-## File: app/(auth)/register.tsx
-````typescript
-import { Link, useRouter } from 'expo-router';
-import { useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View, Pressable } from 'react-native';
+<file path="app/(auth)/register-code.tsx">
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  BackHandler,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { AuthInput } from '@/components/auth/AuthInput';
+import { AuthError } from '@/components/auth/AuthError';
+import { AuthField, type AuthFieldStatus } from '@/components/auth/AuthField';
+import { AuthHeader } from '@/components/auth/AuthHeader';
 import { AppButton } from '@/components/ui/AppButton';
+import { FadeIn } from '@/components/ui/FadeIn';
 import { Screen } from '@/components/ui/Screen';
-import { sendEmailCode } from '@/lib/api/auth';
 import { useAuth } from '@/context/AuthContext';
+import { sendEmailCode, verifyRegistrationCode } from '@/lib/api/auth';
 import { getApiError } from '@/lib/errors';
 import { useThemePalette } from '@/hooks/use-theme-palette';
 
-const socialProviders = [
-  { id: 'google', icon: 'logo-google' as const, label: 'Google', color: '#EA4335' },
-  { id: 'apple', icon: 'logo-apple' as const, label: 'Apple', color: '#000' },
-  { id: 'telegram', icon: 'paper-plane' as const, label: 'Telegram', color: '#0088cc' },
-];
+const PASSWORD_MIN_LENGTH = 6;
+const RESEND_SECONDS = 60;
 
-export default function RegisterScreen() {
+type PasswordStatus = 'idle' | 'valid' | 'invalid';
+
+export default function RegisterCodeScreen() {
   const { signUp } = useAuth();
   const router = useRouter();
   const p = useThemePalette();
-  const [email, setEmail] = useState('');
+  const { email } = useLocalSearchParams<{ email: string }>();
   const [code, setCode] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [codeSent, setCodeSent] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendIn, setResendIn] = useState(RESEND_SECONDS);
+  const [passwordStatus, setPasswordStatus] = useState<PasswordStatus>('idle');
+  const [confirmPasswordStatus, setConfirmPasswordStatus] = useState<PasswordStatus>('idle');
+  const [codeStatus, setCodeStatus] = useState<AuthFieldStatus>('idle');
+  const [codeVerified, setCodeVerified] = useState(false);
+  const verifyRequestId = useRef(0);
+
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('./register');
+    }
+  };
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleBack();
+      return true;
+    });
+    return () => subscription.remove();
+  }, []);
+
+  // Обратный отсчёт до повторной отправки кода.
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const timer = setTimeout(() => setResendIn((v) => v - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendIn]);
+
+  const onResendCode = async () => {
+    setError('');
+    setCodeStatus('idle');
+    setCodeVerified(false);
+    setResending(true);
+    try {
+      await sendEmailCode(email, 'register');
+      setResendIn(RESEND_SECONDS);
+    } catch (e) {
+      setError(getApiError(e, 'Не удалось отправить код'));
+    } finally {
+      setResending(false);
+    }
+  };
+
+  // Живая валидация паролей: статусы полей обновляются сразу при вводе.
+  // idle    — поле пустое (нейтральное);
+  // valid   — пароль >= 6 символов и пароли совпадают (зелёный);
+  // invalid — слишком короткий или пароли не совпадают (красный).
+  const syncPasswordStatuses = useCallback((pass: string, confirm: string) => {
+    // trim() обязателен: автозаполнение может добавить пробел в конец,
+    // и сравнение без trim() ломается.
+    const trimmedPass = pass.trim();
+    const trimmedConfirm = confirm.trim();
+
+    if (!trimmedPass) {
+      setPasswordStatus('idle');
+    } else if (
+      trimmedPass.length < PASSWORD_MIN_LENGTH ||
+      (trimmedConfirm.length > 0 && trimmedConfirm !== trimmedPass)
+    ) {
+      setPasswordStatus('invalid');
+    } else {
+      setPasswordStatus('valid');
+    }
+
+    if (!trimmedConfirm) {
+      setConfirmPasswordStatus('idle');
+    } else if (trimmedConfirm !== trimmedPass) {
+      setConfirmPasswordStatus('invalid');
+    } else {
+      setConfirmPasswordStatus('valid');
+    }
+  }, []);
+
+  const handlePasswordChange = (text: string) => {
+    setPassword(text);
+    setError('');
+    syncPasswordStatuses(text, confirmPassword);
+  };
+
+  const handleConfirmPasswordChange = (text: string) => {
+    setConfirmPassword(text);
+    setError('');
+    syncPasswordStatuses(password, text);
+  };
+
+  // Мгновенная проверка кода: как только введены 6 цифр — отправляем запрос,
+  // без нажатия кнопок.
+  const handleCodeChange = useCallback(
+    (text: string) => {
+      const digits = text.replace(/\D/g, '').slice(0, 6);
+      setCode(digits);
+      setError('');
+      if (!email) return;
+
+      const requestId = ++verifyRequestId.current;
+
+      if (digits.length === 6) {
+        setCodeStatus('loading');
+        setCodeVerified(false);
+        verifyRegistrationCode(email, digits)
+          .then(() => {
+            if (verifyRequestId.current !== requestId) return;
+            setCodeStatus('valid');
+            setCodeVerified(true);
+          })
+          .catch((err) => {
+            if (verifyRequestId.current !== requestId) return;
+            setCodeStatus('invalid');
+            setCodeVerified(false);
+            setError(getApiError(err, 'Проверьте код и попробуйте ещё раз.'));
+          });
+      } else {
+        // Меньше 6 цифр — сбрасываем статус и отменяем «висящий» запрос.
+        setCodeStatus('idle');
+        setCodeVerified(false);
+      }
+    },
+    [email],
+  );
+
+  const onRegister = async () => {
+    setError('');
+    syncPasswordStatuses(password, confirmPassword);
+    if (!codeVerified || code.trim().length !== 6) {
+      setError('Сначала введите и подтвердите код из письма');
+      return;
+    }
+    if (username.trim().length < 3) {
+      setError('Имя — минимум 3 символа');
+      return;
+    }
+    // trim() для сравнения и отправки — лишний пробел не должен ломать проверку.
+    const trimmedPassword = password.trim();
+    const trimmedConfirmPassword = confirmPassword.trim();
+    if (trimmedPassword.length < PASSWORD_MIN_LENGTH) {
+      setError('Пароль — минимум 6 символов');
+      return;
+    }
+    if (trimmedConfirmPassword !== trimmedPassword) {
+      setError('Пароли не совпадают');
+      return;
+    }
+    setLoading(true);
+    try {
+      await signUp(email, code.trim(), username.trim(), trimmedPassword);
+    } catch (e) {
+      setError(getApiError(e, 'Ошибка регистрации'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Screen scroll>
+      <FadeIn>
+        <AuthHeader
+          icon="shield-checkmark-outline"
+          title="Почти готово"
+          subtitle="Введите код из письма и придумайте пароль"
+          onBack={handleBack}
+        />
+      </FadeIn>
+
+      {/* Чип с email: показывает, на какую почту отправлен код */}
+      <View style={[styles.emailChip, { backgroundColor: `${p.primary}0F` }]}>
+        <Ionicons name="mail-outline" size={16} color={p.primary} />
+        <Text style={[styles.emailChipText, { color: p.text }]} numberOfLines={1}>
+          {email}
+        </Text>
+        <Pressable onPress={handleBack} hitSlop={8}>
+          <Text style={[styles.emailChipLink, { color: p.primary }]}>Изменить</Text>
+        </Pressable>
+      </View>
+
+      <FadeIn delay={100}>
+        <View style={styles.form}>
+          <AuthField
+            label="Код из письма"
+            icon="shield-checkmark-outline"
+            placeholder="6 цифр"
+            value={code}
+            onChangeText={handleCodeChange}
+            keyboardType="number-pad"
+            maxLength={6}
+            status={codeStatus}
+            hint="Код отправлен на указанную почту"
+          />
+
+          <AuthField
+            label="Имя пользователя"
+            icon="person-outline"
+            placeholder="Как вас называть?"
+            value={username}
+            onChangeText={setUsername}
+            autoCapitalize="words"
+            hint="Минимум 3 символа"
+          />
+
+          <AuthField
+            label="Пароль"
+            icon="lock-closed-outline"
+            placeholder="Придумайте пароль"
+            value={password}
+            onChangeText={handlePasswordChange}
+            secure
+            autoComplete="new-password"
+            status={passwordStatus}
+            hint={`Минимум ${PASSWORD_MIN_LENGTH} символов`}
+          />
+
+          <AuthField
+            label="Повторите пароль"
+            icon="lock-closed-outline"
+            placeholder="Ещё раз"
+            value={confirmPassword}
+            onChangeText={handleConfirmPasswordChange}
+            secure
+            autoComplete="new-password"
+            status={confirmPasswordStatus}
+          />
+        </View>
+
+        {error ? <AuthError message={error} /> : null}
+
+        <AppButton
+          title={loading ? 'Создание аккаунта…' : 'Создать аккаунт'}
+          onPress={onRegister}
+          loading={loading}
+          disabled={!codeVerified}
+          style={styles.submit}
+        />
+
+        <View style={styles.resendRow}>
+          <Text style={[styles.resendText, { color: p.textMuted }]}>
+            Не пришёл код?{' '}
+          </Text>
+          {resendIn > 0 ? (
+            <Text style={[styles.resendTimer, { color: p.textMuted }]}>
+              Повторно через {resendIn} с
+            </Text>
+          ) : (
+            <Pressable onPress={onResendCode} disabled={resending} hitSlop={8}>
+              {resending ? (
+                <ActivityIndicator size="small" color={p.primary} />
+              ) : (
+                <Text style={[styles.resendLink, { color: p.primary }]}>
+                  Отправить снова
+                </Text>
+              )}
+            </Pressable>
+          )}
+        </View>
+      </FadeIn>
+    </Screen>
+  );
+}
+
+const styles = StyleSheet.create({
+  emailChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 20,
+  },
+  emailChipText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  emailChipLink: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  form: {
+    gap: 20,
+    marginBottom: 8,
+  },
+  submit: {
+    marginBottom: 8,
+  },
+  resendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+  },
+  resendText: {
+    fontSize: 14,
+  },
+  resendTimer: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  resendLink: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+});
+</file>
+
+<file path="app/(auth)/register.tsx">
+import { useRouter } from 'expo-router';
+import { useState } from 'react';
+import { StyleSheet } from 'react-native';
+
+import { AuthError } from '@/components/auth/AuthError';
+import { AuthField } from '@/components/auth/AuthField';
+import { AuthFooterLink } from '@/components/auth/AuthFooterLink';
+import { AuthHeader } from '@/components/auth/AuthHeader';
+import { AuthSocial } from '@/components/auth/AuthSocial';
+import { AppButton } from '@/components/ui/AppButton';
+import { FadeIn } from '@/components/ui/FadeIn';
+import { Screen } from '@/components/ui/Screen';
+import { useAuth } from '@/context/AuthContext';
+import { sendEmailCode } from '@/lib/api/auth';
+import { getApiError } from '@/lib/errors';
+
+export default function RegisterScreen() {
+  const router = useRouter();
+  const { signInWithGoogle } = useAuth();
+  const [email, setEmail] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  const handleGoogleSuccess = async (idToken: string) => {
+    setError('');
+    setGoogleLoading(true);
+    try {
+      await signInWithGoogle(idToken);
+    } catch (e) {
+      setError(getApiError(e, 'Ошибка входа через Google'));
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   const onSendCode = async () => {
     setError('');
@@ -475,7 +704,8 @@ export default function RegisterScreen() {
     setLoading(true);
     try {
       await sendEmailCode(email.trim(), 'register');
-      setCodeSent(true);
+      // Push (а не replace): системная кнопка «назад» вернёт на этот экран.
+      router.push(`./register-code?email=${encodeURIComponent(email.trim())}`);
     } catch (e) {
       setError(getApiError(e, 'Не удалось отправить код'));
     } finally {
@@ -483,306 +713,326 @@ export default function RegisterScreen() {
     }
   };
 
-  const onRegister = async () => {
-    setError('');
-    if (!codeSent) {
-      await onSendCode();
-      return;
-    }
-    if (code.trim().length < 6) {
-      setError('Введите 6-значный код из письма');
-      return;
-    }
-    if (username.trim().length < 3) {
-      setError('Имя — минимум 3 символа');
-      return;
-    }
-    if (password.length < 6) {
-      setError('Пароль — минимум 6 символов');
-      return;
-    }
-    setLoading(true);
-    try {
-      await signUp(email.trim(), code.trim(), username.trim(), password);
-    } catch (e) {
-      setError(getApiError(e, 'Ошибка регистрации'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading && codeSent === undefined) {
-    return (
-      <Screen>
-        <ActivityIndicator size="large" color={p.primary} style={{ marginTop: 80 }} />
-      </Screen>
-    );
-  }
-
   return (
-    <Screen scroll style={styles.container}>
-      <Pressable 
-        onPress={() => router.replace('/(auth)/login')}
-        style={styles.backButton}
-        hitSlop={12}
-      >
-        <Ionicons name="chevron-back" size={28} color={p.text} />
-      </Pressable>
+    <Screen scroll>
+      <FadeIn>
+        <AuthHeader
+          icon="person-add-outline"
+          title="Начать обучение"
+          subtitle="Создайте аккаунт — и учите английский каждый день"
+          onBack={() => router.back()}
+        />
+      </FadeIn>
 
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: p.text }]}>Создать аккаунт</Text>
-        <Text style={[styles.subtitle, { color: p.textMuted }]}>
-          Зарегистрируйтесь и начните учить английский
-        </Text>
-      </View>
+      <FadeIn delay={100}>
+        <AuthField
+          label="Email"
+          icon="mail-outline"
+          placeholder="you@example.com"
+          value={email}
+          onChangeText={(v) => {
+            setEmail(v);
+            if (error) setError('');
+          }}
+          keyboardType="email-address"
+          autoComplete="email"
+          containerStyle={styles.field}
+        />
 
-      <View style={styles.form}>
-        <View style={styles.inputWrapper}>
-          <Ionicons 
-            name="mail-outline" 
-            size={20} 
-            color={p.textMuted} 
-            style={styles.inputIcon} 
-          />
-          <AuthInput
-            placeholder="Email адрес"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoComplete="email"
-            editable={!codeSent}
-            style={styles.inputWithIcon}
-          />
-        </View>
+        {error ? <AuthError message={error} /> : null}
 
-        {codeSent ? (
-          <>
-            <View style={styles.inputWrapper}>
-              <Ionicons 
-                name="checkmark-done" 
-                size={20} 
-                color={p.textMuted} 
-                style={styles.inputIcon} 
-              />
-              <AuthInput
-                placeholder="Код из письма"
-                value={code}
-                onChangeText={setCode}
-                keyboardType="number-pad"
-                maxLength={6}
-                style={styles.inputWithIcon}
-              />
-            </View>
-
-            <View style={styles.inputWrapper}>
-              <Ionicons 
-                name="person-outline" 
-                size={20} 
-                color={p.textMuted} 
-                style={styles.inputIcon} 
-              />
-              <AuthInput
-                placeholder="Имя пользователя"
-                value={username}
-                onChangeText={setUsername}
-                autoComplete="username"
-                style={styles.inputWithIcon}
-              />
-            </View>
-
-            <View style={styles.inputWrapper}>
-              <Ionicons 
-                name="lock-closed-outline" 
-                size={20} 
-                color={p.textMuted} 
-                style={styles.inputIcon} 
-              />
-              <AuthInput
-                placeholder="Пароль (минимум 6 символов)"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                autoComplete="new-password"
-                style={styles.inputWithIcon}
-              />
-              <Pressable 
-                onPress={() => setShowPassword(!showPassword)}
-                style={styles.eyeIcon}
-              >
-                <Ionicons 
-                  name={showPassword ? "eye-outline" : "eye-off-outline"} 
-                  size={20} 
-                  color={p.textMuted} 
-                />
-              </Pressable>
-            </View>
-          </>
-        ) : null}
-      </View>
-
-      {error ? <Text style={[styles.error, { color: p.danger }]}>{error}</Text> : null}
-
-      <AppButton
-        title={
-          codeSent ? 
-            (loading ? 'Создание аккаунта…' : 'Создать аккаунт') : 
-            (loading ? 'Отправка кода…' : 'Отправить код')
-        }
-        onPress={codeSent ? onRegister : onSendCode}
-        loading={loading}
-        style={styles.mainButton}
-      />
-
-      {codeSent ? (
         <AppButton
-          title="Отправить код снова"
-          variant="ghost"
+          title={loading ? 'Отправка кода…' : 'Продолжить'}
           onPress={onSendCode}
           loading={loading}
-          style={styles.secondaryButton}
+          style={styles.submit}
         />
-      ) : null}
+      </FadeIn>
 
-      <View style={styles.dividerContainer}>
-        <View style={[styles.dividerLine, { backgroundColor: p.border }]} />
-        <Text style={[styles.dividerText, { color: p.textMuted }]}>
-          или зарегистрироваться через
-        </Text>
-        <View style={[styles.dividerLine, { backgroundColor: p.border }]} />
-      </View>
+      <FadeIn delay={200}>
+        <AuthSocial
+          onSuccess={handleGoogleSuccess}
+          loading={googleLoading}
+          dividerText="или зарегистрируйтесь через"
+        />
 
-      <View style={styles.socialButtons}>
-        {socialProviders.map((item) => (
-          <Pressable
-            key={item.id}
-            style={({ pressed }) => [
-              styles.socialButton,
-              { backgroundColor: item.color },
-              pressed && { opacity: 0.8 },
-            ]}
-            onPress={() => {}}>
-            <Ionicons name={item.icon} size={24} color="#fff" />
-          </Pressable>
-        ))}
-      </View>
-
-      <View style={styles.footer}>
-        <Text style={[styles.footerText, { color: p.textMuted }]}>
-          Уже есть аккаунт?{' '}
-        </Text>
-        <Link href="/(auth)/login" style={[styles.link, { color: p.primary }]}>
-          Войти
-        </Link>
-      </View>
+        <AuthFooterLink text="Уже есть аккаунт?" linkText="Войти" href="/(auth)/login" />
+      </FadeIn>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    paddingTop: 40,
+  field: {
+    marginBottom: 16,
   },
-  backButton: {
-    marginBottom: 20,
-    alignSelf: 'flex-start',
-    minWidth: 48,
-    minHeight: 48,
-    padding: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 10,
+  submit: {
+    marginBottom: 28,
   },
-  header: {
-    marginBottom: 32,
+});
+</file>
+
+<file path="app/(auth)/reset-password.tsx">
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
+import { useEffect } from 'react';
+import {
+  ActivityIndicator,
+  BackHandler,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { AuthField } from '@/components/auth/AuthField';
+import { AuthFooterLink } from '@/components/auth/AuthFooterLink';
+import { AuthHeader } from '@/components/auth/AuthHeader';
+import { FadeIn } from '@/components/ui/FadeIn';
+import { AppButton } from '@/components/ui/AppButton';
+import { useThemePalette } from '@/hooks/use-theme-palette';
+import { useResetPassword } from '@/hooks/useResetPassword';
+
+export default function ResetPasswordScreen() {
+  const p = useThemePalette();
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+
+  const {
+    step,
+    email,
+    setEmail,
+    code,
+    setCode,
+    newPassword,
+    setNewPassword,
+    emailError,
+    setEmailError,
+    sendingCode,
+    codeError,
+    setCodeError,
+    passwordError,
+    setPasswordError,
+    resetting,
+    resendIn,
+    resending,
+    isResetValid,
+    canResend,
+    sendCode,
+    resendCode,
+    resetPassword,
+    goBackToEmail,
+  } = useResetPassword();
+
+  // Пошаговая навигация «назад»:
+  // шаг 'email' (экран 2) → router.back() вернёт на вход (экран 1);
+  // шаг 'reset' (экран 3) → goBackToEmail() вернёт на шаг 'email',
+  // перескок через шаг невозможен.
+  const handleBack = () => {
+    if (step === 'reset') {
+      goBackToEmail();
+    } else {
+      router.back();
+    }
+  };
+
+  // Перехват системной кнопки «назад» на Android: с шага 'reset' возвращаемся
+  // на шаг 'email', а не сразу на вход.
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (step === 'reset') {
+        goBackToEmail();
+        return true; // отменяем стандартную навигацию (ушла бы на вход)
+      }
+      return false; // стандартная навигация: экран 2 → вход
+    });
+    return () => subscription.remove();
+  }, [step, goBackToEmail]);
+
+  return (
+    <View style={[styles.root, { backgroundColor: p.bg }]}>
+      <LinearGradient
+        colors={[`${p.primary}18`, 'transparent']}
+        style={styles.glow}
+      />
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled">
+          <View style={[styles.content, { paddingTop: insets.top + 24 }]}>
+            <FadeIn>
+              <AuthHeader
+                icon="key-outline"
+                title="Сброс пароля"
+                subtitle={
+                  step === 'email'
+                    ? 'Введите email — отправим код восстановления'
+                    : 'Введите код из письма и новый пароль'
+                }
+                onBack={handleBack}
+              />
+            </FadeIn>
+
+            <FadeIn delay={100}>
+              <View style={styles.form}>
+                {step === 'email' ? (
+                  <AuthField
+                    label="Email"
+                    icon="mail-outline"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChangeText={(v) => {
+                      setEmail(v);
+                      if (emailError) setEmailError('');
+                    }}
+                    keyboardType="email-address"
+                    autoComplete="email"
+                    editable={!sendingCode}
+                    error={emailError || undefined}
+                  />
+                ) : (
+                  <>
+                    <AuthField
+                      label="Код подтверждения"
+                      icon="shield-checkmark-outline"
+                      placeholder="6-значный код"
+                      value={code}
+                      onChangeText={(v) => {
+                        setCode(v.replace(/[^0-9]/g, ''));
+                        if (codeError) setCodeError('');
+                      }}
+                      keyboardType="number-pad"
+                      maxLength={6}
+                      editable={!resetting}
+                      error={codeError || undefined}
+                    />
+
+                    <AuthField
+                      label="Новый пароль"
+                      icon="lock-closed-outline"
+                      placeholder="Минимум 8 символов"
+                      value={newPassword}
+                      onChangeText={(v) => {
+                        setNewPassword(v);
+                        if (passwordError) setPasswordError('');
+                      }}
+                      secure
+                      autoCapitalize="none"
+                      autoComplete="new-password"
+                      editable={!resetting}
+                      error={passwordError || undefined}
+                    />
+
+                    <View style={styles.resendRow}>
+                      <Text style={[styles.resendText, { color: p.textMuted }]}>
+                        Не пришёл код?{' '}
+                      </Text>
+                      {canResend ? (
+                        <Pressable
+                          onPress={resendCode}
+                          disabled={resending}
+                          hitSlop={8}>
+                          {resending ? (
+                            <ActivityIndicator size="small" color={p.primary} />
+                          ) : (
+                            <Text style={[styles.resendLink, { color: p.primary }]}>
+                              Отправить повторно
+                            </Text>
+                          )}
+                        </Pressable>
+                      ) : (
+                        <Text style={[styles.resendTimer, { color: p.textMuted }]}>
+                          Отправить повторно через {resendIn} сек
+                        </Text>
+                      )}
+                    </View>
+                  </>
+                )}
+              </View>
+            </FadeIn>
+
+            <FadeIn delay={200}>
+              {step === 'email' ? (
+                <AppButton
+                  title={sendingCode ? 'Отправка…' : 'Отправить код'}
+                  onPress={sendCode}
+                  loading={sendingCode}
+                  style={styles.submit}
+                />
+              ) : (
+                <AppButton
+                  title={resetting ? 'Сохранение…' : 'Сбросить пароль'}
+                  onPress={resetPassword}
+                  loading={resetting}
+                  disabled={!isResetValid}
+                  style={styles.submit}
+                />
+              )}
+
+              <AuthFooterLink
+                text="Вспомнили пароль?"
+                linkText="Войти"
+                href="/(auth)/login"
+              />
+            </FadeIn>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+  flex: { flex: 1 },
+  glow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 260,
   },
-  title: {
-    fontSize: 36,
-    fontWeight: '700',
-    marginBottom: 8,
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    fontSize: 16,
-    lineHeight: 24,
+  scrollContent: { flexGrow: 1 },
+  content: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingBottom: 24,
   },
   form: {
     gap: 20,
-    marginBottom: 16,
+    marginBottom: 28,
   },
-  inputWrapper: {
-    position: 'relative',
+  resendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
+    marginTop: -4,
   },
-  inputIcon: {
-    position: 'absolute',
-    left: 16,
-    zIndex: 1,
-  },
-  inputWithIcon: {
-    paddingLeft: 48,
-  },
-  eyeIcon: {
-    position: 'absolute',
-    right: 16,
-    padding: 4,
-  },
-  error: {
-    textAlign: 'center',
-    marginBottom: 16,
-    lineHeight: 20,
+  resendText: {
     fontSize: 14,
   },
-  mainButton: {
-    marginBottom: 12,
-  },
-  secondaryButton: {
-    marginBottom: 24,
-  },
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 24,
-    marginTop: 12,
-    gap: 12,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-  },
-  dividerText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  socialButtons: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 16,
-    marginBottom: 32,
-  },
-  socialButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  footerText: {
-    fontSize: 15,
-  },
-  link: {
-    fontSize: 15,
+  resendLink: {
+    fontSize: 14,
     fontWeight: '700',
   },
+  resendTimer: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  submit: {
+    marginBottom: 8,
+  },
 });
-````
+</file>
 
-## File: app/(tabs)/_layout.tsx
-````typescript
+<file path="app/(tabs)/_layout.tsx">
 import { Tabs } from 'expo-router';
 import { Platform, StyleSheet } from 'react-native';
 
@@ -790,12 +1040,10 @@ import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Palette } from '@/constants/design';
 import { useAuth } from '@/context/AuthContext';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useStudyTimer } from '@/hooks/useStudyTimer';
 
 export default function TabLayout() {
-  const scheme = useColorScheme();
-  const colors = Palette[scheme === 'dark' ? 'dark' : 'light'];
+  const colors = Palette.light;
   const { user } = useAuth();
   useStudyTimer(!!user);
 
@@ -824,7 +1072,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Learn',
+          title: 'Обучение',
           tabBarIcon: ({ color }) => (
             <IconSymbol size={26} name="house.fill" color={color} />
           ),
@@ -833,16 +1081,16 @@ export default function TabLayout() {
       <Tabs.Screen
         name="cards"
         options={{
-          title: 'Words',
+          title: 'Карточки',
           tabBarIcon: ({ color }) => (
-            <IconSymbol size={26} name="rectangle.stack.fill" color={color} />
+            <IconSymbol size={26} name="book.fill" color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Settings',
+          title: 'Профиль',
           tabBarIcon: ({ color }) => (
             <IconSymbol size={26} name="person.fill" color={color} />
           ),
@@ -861,69 +1109,55 @@ const styles = StyleSheet.create({
   label: { fontSize: 11, fontWeight: '600' },
   icon: { marginBottom: 2 },
 });
-````
+</file>
 
-## File: app/(tabs)/cards.tsx
-````typescript
-import { useCallback, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import * as Speech from 'expo-speech';
+<file path="app/(tabs)/cards.tsx">
+import { useCallback, useEffect, useState } from 'react';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
 
-import { FlashCard } from '@/components/learn/FlashCard';
-import { AppButton } from '@/components/ui/AppButton';
+import { LevelBadge } from '@/components/ui/LevelBadge';
 import { Screen } from '@/components/ui/Screen';
 import { LevelColors } from '@/constants/design';
-import { fetchRandomPhrase, type Phrase } from '@/lib/api/phrases';
-import { markPhraseLearned } from '@/lib/api/stats';
+import { useWords, type UserWord } from '@/context/WordsContext';
 import { useThemePalette } from '@/hooks/use-theme-palette';
+import { fetchPhrasesPage, type Phrase } from '@/lib/api/phrases';
 
 const LEVELS = ['', 'A1', 'A2', 'B1', 'B2'] as const;
 
+type WordRow = (Phrase & { isCustom?: boolean }) | UserWord;
+
 export default function CardsScreen() {
   const p = useThemePalette();
-  const [phrase, setPhrase] = useState<Phrase | null>(null);
-  const [level, setLevel] = useState<string>('');
-  const [loading, setLoading] = useState(false);
-  const [score, setScore] = useState({ known: 0, review: 0 });
+  const { customWords } = useWords();
+  const [phrases, setPhrases] = useState<Phrase[]>([]);
+  const [level, setLevel] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  const loadPhrase = useCallback(async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
-      const next = await fetchRandomPhrase(level || undefined);
-      setPhrase(next);
-      Speech.speak(next.en, { language: 'en-US' });
+      const data = await fetchPhrasesPage({ skip: 0, limit: 50, level: level || undefined });
+      setPhrases(data.items);
+    } catch {
+      setPhrases([]);
     } finally {
       setLoading(false);
     }
   }, [level]);
 
-  const onKnown = async () => {
-    if (!phrase) return;
-    setScore((s) => ({ ...s, known: s.known + 1 }));
-    try {
-      await markPhraseLearned(phrase.id);
-    } catch {
-      /* ignore */
-    }
-    loadPhrase();
-  };
+  useEffect(() => {
+    load();
+  }, [load]);
 
-  const onReview = () => {
-    setScore((s) => ({ ...s, review: s.review + 1 }));
-    loadPhrase();
-  };
+  const items: WordRow[] = [
+    ...(level ? customWords.filter((w) => w.level === level) : customWords),
+    ...phrases,
+  ];
 
   return (
-    <Screen scroll>
+    <Screen>
       <Text style={[styles.title, { color: p.text }]}>Карточки</Text>
-      <Text style={[styles.sub, { color: p.textMuted }]}>
-        Переворачивайте карточку и проверяйте себя
-      </Text>
-
-      <View style={styles.scoreRow}>
-        <Text style={[styles.score, { color: p.accent }]}>✓ {score.known}</Text>
-        <Text style={[styles.score, { color: p.textMuted }]}>↻ {score.review}</Text>
-      </View>
+      <Text style={[styles.sub, { color: p.textMuted }]}>Коллекция изучаемых слов. Всего: {items.length}</Text>
 
       <View style={styles.levels}>
         {LEVELS.map((lvl) => {
@@ -947,17 +1181,32 @@ export default function CardsScreen() {
         })}
       </View>
 
-      <FlashCard phrase={phrase} loading={loading} />
-
-      <View style={styles.actions}>
-        <AppButton title="Новая карточка" onPress={loadPhrase} loading={loading} />
-        {phrase ? (
-          <View style={styles.row}>
-            <AppButton title="Знаю ✓" onPress={onKnown} style={{ flex: 1 }} />
-            <AppButton title="Ещё раз" variant="ghost" onPress={onReview} style={{ flex: 1 }} />
+      <FlatList
+        style={styles.list}
+        data={items}
+        keyExtractor={(item) => String(item.id)}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.listContent}
+        ListEmptyComponent={
+          <Text style={[styles.empty, { color: p.textMuted }]}>
+            {loading ? 'Загрузка…' : 'Нет слов'}
+          </Text>
+        }
+        renderItem={({ item }) => (
+          <View style={[styles.item, { backgroundColor: p.card, borderColor: p.border }]}>
+            <View style={styles.row}>
+              <LevelBadge level={item.level} />
+              {item.isCustom ? (
+                <Text style={[styles.customBadge, { color: p.primary }]}>Моё слово</Text>
+              ) : (
+                <Text style={{ color: p.textMuted, fontSize: 12 }}>{item.topic}</Text>
+              )}
+            </View>
+            <Text style={[styles.en, { color: p.text }]}>{item.en}</Text>
+            <Text style={{ color: p.textMuted }}>{item.ru}</Text>
           </View>
-        ) : null}
-      </View>
+        )}
+      />
     </Screen>
   );
 }
@@ -965,32 +1214,36 @@ export default function CardsScreen() {
 const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: '800', marginTop: 8 },
   sub: { fontSize: 14, marginBottom: 12 },
-  scoreRow: { flexDirection: 'row', gap: 16, marginBottom: 12 },
-  score: { fontSize: 16, fontWeight: '700' },
-  levels: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
+  levels: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
   chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
     borderWidth: 1,
+    fontSize: 12,
     fontWeight: '600',
-    fontSize: 13,
   },
-  actions: { gap: 10, marginTop: 8 },
-  row: { flexDirection: 'row', gap: 10 },
+  list: { flex: 1 },
+  listContent: { paddingBottom: 24 },
+  empty: { textAlign: 'center', marginTop: 24 },
+  item: { padding: 16, borderRadius: 16, borderWidth: 1, marginBottom: 10, gap: 6 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  customBadge: { fontSize: 12, fontWeight: '700' },
+  en: { fontSize: 16, fontWeight: '600' },
 });
-````
+</file>
 
-## File: app/(tabs)/explore.tsx
-````typescript
+<file path="app/(tabs)/explore.tsx">
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import * as Speech from 'expo-speech';
 
 import { LevelBadge } from '@/components/ui/LevelBadge';
 import { Screen } from '@/components/ui/Screen';
@@ -1092,13 +1345,28 @@ export default function ExploreScreen() {
             ) : null
           }
           renderItem={({ item }) => (
-            <View style={[styles.item, { backgroundColor: p.card, borderColor: p.border }]}>
-              <View style={styles.row}>
-                <LevelBadge level={item.level} />
-                <Text style={{ color: p.textMuted, fontSize: 12 }}>{item.topic}</Text>
+            <View
+              style={[styles.item, { backgroundColor: p.card, borderColor: p.border }]}>
+              <View
+                style={[
+                  styles.accentBar,
+                  { backgroundColor: LevelColors[item.level] },
+                ]}
+              />
+              <View style={styles.itemBody}>
+                <View style={styles.row}>
+                  <LevelBadge level={item.level} />
+                  <Text style={{ color: p.textMuted, fontSize: 12 }}>{item.topic}</Text>
+                  <Pressable
+                    onPress={() => Speech.speak(item.en, { language: 'en-US' })}
+                    style={({ pressed }) => pressed && { opacity: 0.5 }}
+                    hitSlop={8}>
+                    <Text style={[styles.speak, { color: p.primary }]}>🔊</Text>
+                  </Pressable>
+                </View>
+                <Text style={[styles.en, { color: p.text }]}>{item.en}</Text>
+                <Text style={{ color: p.textMuted }}>{item.ru}</Text>
               </View>
-              <Text style={[styles.en, { color: p.text }]}>{item.en}</Text>
-              <Text style={{ color: p.textMuted }}>{item.ru}</Text>
             </View>
           )}
           ListEmptyComponent={
@@ -1125,119 +1393,116 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   item: {
-    padding: 16,
+    flexDirection: 'row',
     borderRadius: 16,
     borderWidth: 1,
     marginBottom: 10,
-    gap: 6,
+    overflow: 'hidden',
   },
+  accentBar: { width: 5 },
+  itemBody: { flex: 1, padding: 16, gap: 6 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  speak: { fontSize: 16, marginLeft: 4 },
   en: { fontSize: 16, fontWeight: '600' },
 });
-````
+</file>
 
-## File: app/(tabs)/index.tsx
-````typescript
-import { useRouter } from 'expo-router';
+<file path="app/(tabs)/index.tsx">
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter, type Href } from 'expo-router';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { HomeIllustration } from '@/components/learn/HomeIllustration';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useAuth } from '@/context/AuthContext';
 import { useThemePalette } from '@/hooks/use-theme-palette';
 
 type ModeCard = {
   id: string;
   title: string;
   description: string;
-  icon: 'rectangle.stack.fill' | 'gamecontroller.fill';
-  color: string;
-  bg: string;
-  route: '/(tabs)/cards' | '/(tabs)/practice';
+  illustration: 'flashcards' | 'games';
+  emoji: string;
+  route: '/flashcards' | '/(tabs)/practice';
 };
 
 export default function HomeScreen() {
   const p = useThemePalette();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+
+  const firstName = (user?.username ?? 'друг').split(/[\s_@]/)[0];
 
   const cards: ModeCard[] = [
     {
       id: 'flashcards',
-      title: 'Flashcards',
-      description: 'Swipe up and down to learn new words',
-      icon: 'rectangle.stack.fill',
-      color: p.primary,
-      bg: `${p.primary}15`,
-      route: '/(tabs)/cards',
+      title: 'Флеш-карточки',
+      description: 'Листай вверх и вниз, чтобы учить новые слова.',
+      illustration: 'flashcards',
+      emoji: '🃏',
+      route: '/flashcards',
     },
     {
       id: 'mini-games',
-      title: 'Mini-Games',
-      description: 'Practice and test your knowledge in a fun way',
-      icon: 'gamecontroller.fill',
-      color: '#F97316',
-      bg: '#F9731615',
+      title: 'Мини-игры',
+      description: 'Практикуйся и проверяй знания с удовольствием.',
+      illustration: 'games',
+      emoji: '🎮',
       route: '/(tabs)/practice',
     },
   ];
 
-  const handlePress = (route: ModeCard['route']) => {
-    router.push(route);
-  };
-
   const renderCard = ({ item }: { item: ModeCard }) => (
     <Pressable
-      onPress={() => handlePress(item.route)}
+      onPress={() => router.push(item.route as Href)}
       style={({ pressed }) => [
         styles.card,
         { backgroundColor: p.card },
-        pressed && { opacity: 0.92 },
+        pressed && { opacity: 0.92, transform: [{ scale: 0.99 }] },
       ]}>
-      <View style={[styles.cardIcon, { backgroundColor: item.bg }]}>
-        <IconSymbol name={item.icon} size={28} color={item.color} />
-      </View>
+      <HomeIllustration variant={item.illustration} />
       <View style={styles.cardContent}>
-        <Text style={[styles.cardTitle, { color: p.text }]}>
-          {item.title}
-        </Text>
-        <Text
-          style={[styles.cardDesc, { color: p.textMuted }]}
-          numberOfLines={2}>
-          {item.description}
-        </Text>
+        <View style={styles.titleRow}>
+          <LinearGradient
+            colors={p.gradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.emojiBadge}>
+            <Text style={styles.emojiText}>{item.emoji}</Text>
+          </LinearGradient>
+          <Text style={[styles.cardTitle, { color: p.text }]}>{item.title}</Text>
+        </View>
+        <Text style={[styles.cardDesc, { color: p.textMuted }]}>{item.description}</Text>
+        <View style={styles.cardLink}>
+          <Text style={[styles.cardLinkText, { color: p.primary }]}>Открыть</Text>
+          <IconSymbol name="chevron.right" size={18} color={p.primary} />
+        </View>
       </View>
-      <IconSymbol name="chevron.right" size={20} color={p.textMuted} />
     </Pressable>
   );
 
   return (
     <View style={[styles.container, { backgroundColor: p.bg }]}>
-      {/* Custom Header */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <Text style={[styles.headerTitle, { color: p.text }]}>Learn</Text>
-        <View style={styles.headerActions}>
-          <Pressable
-            onPress={() => handlePress('/(tabs)/cards')}
-            style={({ pressed }) => [
-              styles.iconBtn,
-              { backgroundColor: p.card, borderColor: p.border },
-              pressed && { opacity: 0.7 },
-            ]}>
-            <IconSymbol name="plus" size={24} color={p.text} />
-          </Pressable>
-          <Pressable
-            onPress={() => router.push('/(tabs)/profile')}
-            style={({ pressed }) => [
-              styles.iconBtn,
-              { backgroundColor: p.card, borderColor: p.border },
-              pressed && { opacity: 0.7 },
-            ]}>
-            <IconSymbol name="gear" size={22} color={p.text} />
-          </Pressable>
+        <View>
+          <Text style={[styles.greeting, { color: p.textMuted }]}>Хаб обучения</Text>
+          <Text style={[styles.headerTitle, { color: p.text }]}>
+            Привет, {firstName}! 👋
+          </Text>
         </View>
+        <Pressable
+          onPress={() => router.push('/modal')}
+          style={({ pressed }) => [
+            styles.addBtn,
+            { backgroundColor: p.card, borderColor: p.border },
+            pressed && { opacity: 0.7 },
+          ]}>
+          <IconSymbol name="plus" size={24} color={p.text} />
+        </Pressable>
       </View>
 
-      {/* Card List */}
       <FlatList
         data={cards}
         renderItem={renderCard}
@@ -1261,19 +1526,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 16,
   },
+  greeting: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
   headerTitle: {
     fontSize: 34,
     fontWeight: '800',
     letterSpacing: -0.5,
   },
-  headerActions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+  addBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1283,44 +1549,62 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   separator: {
-    height: 14,
+    height: 16,
   },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 16,
+    borderRadius: 24,
     padding: 16,
-    gap: 14,
+    gap: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
-    shadowRadius: 8,
+    shadowRadius: 10,
     elevation: 2,
-  },
-  cardIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   cardContent: {
     flex: 1,
-    gap: 4,
+    gap: 6,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  emojiBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emojiText: {
+    fontSize: 18,
   },
   cardTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '800',
+    flexShrink: 1,
   },
   cardDesc: {
     fontSize: 14,
-    lineHeight: 19,
+    lineHeight: 20,
+  },
+  cardLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  cardLinkText: {
+    fontSize: 14,
+    fontWeight: '700',
   },
 });
-````
+</file>
 
-## File: app/(tabs)/leaderboard.tsx
-````typescript
+<file path="app/(tabs)/leaderboard.tsx">
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
@@ -1495,10 +1779,10 @@ const styles = StyleSheet.create({
   name: { fontSize: 16, fontWeight: '700' },
   value: { fontSize: 13 },
 });
-````
+</file>
 
-## File: app/(tabs)/practice.tsx
-````typescript
+<file path="app/(tabs)/practice.tsx">
+import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Speech from 'expo-speech';
@@ -1603,6 +1887,18 @@ export default function PracticeScreen() {
         Вопрос {index + 1} из {questions.length} · Счёт: {score}
       </Text>
 
+      <View style={[styles.progressTrack, { backgroundColor: p.border }]}>
+        <LinearGradient
+          colors={p.gradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={[
+            styles.progressFill,
+            { width: `${((index + (selected !== null ? 1 : 0)) / questions.length) * 100}%` },
+          ]}
+        />
+      </View>
+
       <View style={styles.levels}>
         {LEVELS.map((lvl) => {
           const active = level === lvl;
@@ -1682,7 +1978,14 @@ export default function PracticeScreen() {
 
 const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: '800', marginTop: 8 },
-  sub: { fontSize: 14, marginBottom: 12 },
+  sub: { fontSize: 14, marginBottom: 8 },
+  progressTrack: {
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  progressFill: { height: 8, borderRadius: 4 },
   levels: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
   chip: {
     paddingHorizontal: 12,
@@ -1724,10 +2027,10 @@ const styles = StyleSheet.create({
   doneTitle: { fontSize: 20, fontWeight: '800', textAlign: 'center' },
   doneSub: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
 });
-````
+</file>
 
-## File: app/(tabs)/profile.tsx
-````typescript
+<file path="app/(tabs)/profile.tsx">
+import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, StyleSheet, Text, View } from 'react-native';
 
@@ -1771,16 +2074,36 @@ export default function ProfileScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={p.primary} />
       }>
       <Text style={[styles.title, { color: p.text }]}>Профиль</Text>
-      <Text style={[styles.email, { color: p.textMuted }]}>{user?.email}</Text>
-      <Text style={[styles.user, { color: p.text }]}>@{user?.username}</Text>
+
+      <View style={[styles.hero, { backgroundColor: p.card, borderColor: p.border }]}>
+        <LinearGradient
+          colors={p.gradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.avatar}>
+          <Text style={styles.avatarText}>
+            {(user?.username?.[0] ?? '?').toUpperCase()}
+          </Text>
+        </LinearGradient>
+        <View style={styles.heroInfo}>
+          <Text style={[styles.user, { color: p.text }]}>@{user?.username}</Text>
+          <Text style={[styles.email, { color: p.textMuted }]}>{user?.email}</Text>
+          {stats ? (
+            <Text style={[styles.heroStreak, { color: p.primary }]}>
+              🔥 {stats.streak_days} дней подряд
+            </Text>
+          ) : null}
+        </View>
+      </View>
 
       <View style={styles.grid}>
-        <StatCard label="Выучено" value={stats?.phrases_learned ?? '—'} />
-        <StatCard label="Просмотров" value={stats?.total_views ?? '—'} />
+        <StatCard label="Выучено" value={stats?.phrases_learned ?? '—'} icon="✅" />
+        <StatCard label="Просмотров" value={stats?.total_views ?? '—'} icon="👀" />
         <StatCard
           label="Прогресс"
           value={stats ? `${stats.progress_percent}%` : '—'}
-          accent={p.accent}
+          icon="📈"
+          highlight
         />
         <StatCard
           label="Время в приложении"
@@ -1789,6 +2112,7 @@ export default function ProfileScreen() {
               ? `${Math.floor(stats.study_time_seconds / 60)} мин`
               : '—'
           }
+          icon="⏱️"
         />
         <StatCard
           label="Серия дней"
@@ -1829,9 +2153,28 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 28, fontWeight: '800', marginTop: 8 },
-  email: { fontSize: 14, marginTop: 4 },
-  user: { fontSize: 20, fontWeight: '700', marginBottom: 20 },
+  title: { fontSize: 28, fontWeight: '800', marginTop: 8, marginBottom: 16 },
+  hero: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginBottom: 20,
+  },
+  avatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: { color: '#fff', fontSize: 26, fontWeight: '800' },
+  heroInfo: { flex: 1, gap: 2 },
+  heroStreak: { fontSize: 13, fontWeight: '700', marginTop: 4 },
+  email: { fontSize: 14 },
+  user: { fontSize: 20, fontWeight: '700' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   block: {
     marginTop: 24,
@@ -1846,10 +2189,9 @@ const styles = StyleSheet.create({
   barFill: { height: 8, borderRadius: 4 },
   hint: { fontSize: 13, marginTop: 4 },
 });
-````
+</file>
 
-## File: app/(tabs)/review.tsx
-````typescript
+<file path="app/(tabs)/review.tsx">
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import * as Speech from 'expo-speech';
@@ -2054,42 +2396,207 @@ const styles = StyleSheet.create({
   doneTitle: { fontSize: 20, fontWeight: '800', textAlign: 'center' },
   doneSub: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
 });
-````
+</file>
 
-## File: app/_layout.tsx
-````typescript
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+<file path="app/_layout.tsx">
+import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
+import { WordsProvider } from '@/context/WordsContext';
 import { AuthProvider } from '@/context/AuthContext';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-
   return (
     <AuthProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="(auth)" />
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen
-            name="modal"
-            options={{ presentation: 'modal', title: 'Modal', headerShown: true }}
-          />
-        </Stack>
-        <StatusBar style="auto" />
-      </ThemeProvider>
+      <WordsProvider>
+        <ThemeProvider value={DefaultTheme}>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="(auth)" />
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="flashcards" />
+            <Stack.Screen
+              name="modal"
+              options={{ presentation: 'modal', title: 'Добавить новое слово', headerShown: true }}
+            />
+          </Stack>
+          <StatusBar style="dark" />
+        </ThemeProvider>
+      </WordsProvider>
     </AuthProvider>
   );
 }
-````
+</file>
 
-## File: app/index.tsx
-````typescript
+<file path="app/flashcards.tsx">
+import { useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { AppButton } from '@/components/ui/AppButton';
+import { FlashCard } from '@/components/learn/FlashCard';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { LevelBadge } from '@/components/ui/LevelBadge';
+import { LevelColors } from '@/constants/design';
+import { useWords } from '@/context/WordsContext';
+import { useThemePalette } from '@/hooks/use-theme-palette';
+import { fetchRandomPhrase, type Phrase } from '@/lib/api/phrases';
+
+const LEVELS = ['', 'A1', 'A2', 'B1', 'B2'] as const;
+
+export default function FlashcardsScreen() {
+  const router = useRouter();
+  const p = useThemePalette();
+  const insets = useSafeAreaInsets();
+  const { customWords } = useWords();
+
+  const [phrase, setPhrase] = useState<Phrase | null>(null);
+  const [level, setLevel] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+  const [index, setIndex] = useState(0);
+
+  const loadPhrase = useCallback(async () => {
+    setLoading(true);
+    try {
+      const next = await fetchRandomPhrase(level || undefined);
+      setPhrase(next);
+    } finally {
+      setLoading(false);
+    }
+  }, [level]);
+
+  const onNext = () => {
+    if (customWords.length > 0 && index < customWords.length) {
+      setIndex((i) => i + 1);
+    } else {
+      loadPhrase();
+    }
+  };
+
+  const custom = customWords[index] ?? null;
+  const hasCustom = customWords.length > 0 && index < customWords.length;
+
+  return (
+    <View style={[styles.container, { backgroundColor: p.bg }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        <Pressable
+          onPress={() => router.back()}
+          style={({ pressed }) => [
+            styles.backBtn,
+            { backgroundColor: p.card, borderColor: p.border },
+            pressed && { opacity: 0.7 },
+          ]}
+          hitSlop={8}>
+          <IconSymbol name="chevron.right" size={20} color={p.text} style={styles.backIcon} />
+          <Text style={[styles.backText, { color: p.text }]}>Назад</Text>
+        </Pressable>
+        <Text style={[styles.title, { color: p.text }]}>Флеш-карточки</Text>
+        <View style={styles.headerSpacer} />
+      </View>
+
+      <View style={styles.levels}>
+        {LEVELS.map((lvl) => {
+          const active = level === lvl;
+          const color = lvl ? LevelColors[lvl] : p.primary;
+          return (
+            <Text
+              key={lvl || 'all'}
+              onPress={() => setLevel(lvl)}
+              style={[
+                styles.chip,
+                {
+                  backgroundColor: active ? `${color}33` : p.card,
+                  borderColor: active ? color : p.border,
+                  color: active ? color : p.textMuted,
+                },
+              ]}>
+              {lvl || 'Все'}
+            </Text>
+          );
+        })}
+      </View>
+
+      {hasCustom ? (
+        <View style={styles.customCard}>
+          <View style={styles.row}>
+            <LevelBadge level={custom?.level ?? 'A1'} />
+            <Text style={[styles.topic, { color: p.textMuted }]}>Моё слово</Text>
+          </View>
+          <Text style={[styles.en, { color: p.text }]}>{custom?.en}</Text>
+          <Text style={[styles.ru, { color: p.textMuted }]}>{custom?.ru}</Text>
+        </View>
+      ) : (
+        <FlashCard phrase={phrase} loading={loading} />
+      )}
+
+      <View style={styles.actions}>
+        <AppButton
+          title={hasCustom ? 'Следующее слово' : 'Следующая карточка'}
+          onPress={onNext}
+          loading={loading && !hasCustom}
+        />
+        {hasCustom ? (
+          <AppButton
+            title="Перейти к словам из каталога"
+            variant="ghost"
+            onPress={() => {
+              setIndex(customWords.length);
+              loadPhrase();
+            }}
+          />
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, paddingHorizontal: 20 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingBottom: 12 },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  backIcon: { transform: [{ rotate: '180deg' }] },
+  backText: { fontSize: 15, fontWeight: '700', marginLeft: 4 },
+  title: { flex: 1, textAlign: 'center', fontSize: 20, fontWeight: '800' },
+  headerSpacer: { width: 74 },
+  levels: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  customCard: {
+    marginVertical: 16,
+    padding: 24,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: '#5B5FEF',
+    backgroundColor: '#F2F3F5',
+    gap: 10,
+    minHeight: 260,
+    justifyContent: 'center',
+  },
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  topic: { fontSize: 13 },
+  en: { fontSize: 28, fontWeight: '800', textAlign: 'center', lineHeight: 36 },
+  ru: { fontSize: 17, textAlign: 'center', lineHeight: 24 },
+  actions: { gap: 10, marginTop: 8 },
+});
+</file>
+
+<file path="app/index.tsx">
 import { Redirect } from 'expo-router';
 import { ActivityIndicator, View } from 'react-native';
 
@@ -2112,176 +2619,1108 @@ export default function Index() {
 
   return <Redirect href="/(auth)/login" />;
 }
-````
+</file>
 
-## File: app/modal.tsx
-````typescript
-import { Link } from 'expo-router';
-import { StyleSheet } from 'react-native';
+<file path="app/modal.tsx">
+import { useRouter } from 'expo-router';
+import { useState } from 'react';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import { AppButton } from '@/components/ui/AppButton';
+import { LevelColors } from '@/constants/design';
+import { useWords } from '@/context/WordsContext';
+import { useThemePalette } from '@/hooks/use-theme-palette';
 
-export default function ModalScreen() {
+const LEVELS = ['A1', 'A2', 'B1', 'B2'] as const;
+
+export default function AddWordModal() {
+  const router = useRouter();
+  const p = useThemePalette();
+  const { addWord } = useWords();
+
+  const [en, setEn] = useState('');
+  const [ru, setRu] = useState('');
+  const [level, setLevel] = useState<string>('');
+  const [error, setError] = useState('');
+
+  const onSubmit = () => {
+    setError('');
+
+    if (!en.trim()) {
+      setError('Введите английское слово');
+      return;
+    }
+    if (!ru.trim()) {
+      setError('Введите перевод на русский');
+      return;
+    }
+    if (!level) {
+      setError('Выберите уровень сложности');
+      return;
+    }
+
+    addWord(en, ru, level);
+    router.back();
+  };
+
   return (
-    <ThemedView style={styles.container}>
-      <ThemedText type="title">This is a modal</ThemedText>
-      <Link href="/" dismissTo style={styles.link}>
-        <ThemedText type="link">Go to home screen</ThemedText>
-      </Link>
-    </ThemedView>
+    <View style={[styles.container, { backgroundColor: p.bg }]}>
+      <Text style={[styles.title, { color: p.text }]}>Добавить новое слово</Text>
+      <Text style={[styles.subtitle, { color: p.textMuted }]}>
+        Добавьте слово в свою коллекцию, и оно появится в разделе «Карточки».
+      </Text>
+
+      <View style={styles.field}>
+        <Text style={[styles.label, { color: p.text }]}>Английское слово</Text>
+        <TextInput
+          value={en}
+          onChangeText={setEn}
+          placeholder="Например, apple"
+          placeholderTextColor={p.textMuted}
+          autoCapitalize="none"
+          autoCorrect={false}
+          style={[
+            styles.input,
+            { backgroundColor: p.card, color: p.text, borderColor: p.border },
+          ]}
+        />
+      </View>
+
+      <View style={styles.field}>
+        <Text style={[styles.label, { color: p.text }]}>Перевод на русский</Text>
+        <TextInput
+          value={ru}
+          onChangeText={setRu}
+          placeholder="Например, яблоко"
+          placeholderTextColor={p.textMuted}
+          style={[
+            styles.input,
+            { backgroundColor: p.card, color: p.text, borderColor: p.border },
+          ]}
+        />
+      </View>
+
+      <View style={styles.field}>
+        <Text style={[styles.label, { color: p.text }]}>Уровень сложности</Text>
+        <View style={styles.levels}>
+          {LEVELS.map((lvl) => {
+            const active = level === lvl;
+            const color = LevelColors[lvl] ?? p.primary;
+            return (
+              <Pressable
+                key={lvl}
+                onPress={() => setLevel(lvl)}
+                style={[
+                  styles.chip,
+                  {
+                    backgroundColor: active ? `${color}33` : p.card,
+                    borderColor: active ? color : p.border,
+                  },
+                ]}>
+                <Text style={{ color: active ? color : p.textMuted, fontWeight: '700' }}>
+                  {lvl}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      {error ? <Text style={[styles.error, { color: p.danger }]}>{error}</Text> : null}
+
+      <View style={styles.actions}>
+        <AppButton title="Сохранить" onPress={onSubmit} style={styles.button} />
+        <AppButton
+          title="Отмена"
+          variant="ghost"
+          onPress={() => router.back()}
+          style={styles.button}
+        />
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 16,
   },
-  link: {
-    marginTop: 15,
-    paddingVertical: 15,
+  title: { fontSize: 24, fontWeight: '800' },
+  subtitle: { fontSize: 14, lineHeight: 20, marginTop: 6, marginBottom: 20 },
+  field: { marginBottom: 16 },
+  label: { fontSize: 14, fontWeight: '600', marginBottom: 8 },
+  input: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    fontSize: 16,
   },
+  levels: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  chip: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 24,
+    borderWidth: 1,
+  },
+  error: {
+    textAlign: 'center',
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  actions: { gap: 10, marginTop: 'auto', paddingBottom: 24 },
+  button: { width: '100%' },
 });
-````
+</file>
 
-## File: components/auth/AuthField.tsx
-````typescript
-import { StyleSheet, Text, TextInput, type TextInputProps, View } from 'react-native';
+<file path="app/oauthredirect.tsx">
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useRef } from 'react';
+import { ActivityIndicator, View } from 'react-native';
+
+import { useAuth } from '@/context/AuthContext';
+
+/**
+ * Защитный обработчик deep link `ingich://oauthredirect?...`.
+ *
+ * Когда Google возвращает пользователя в приложение, deep link может быть
+ * перехвачен Expo Router (а не только expo-auth-session). Без этого экрана
+ * Router показывает "Unmatched Route", потому что файла-обработчика для пути
+ * `oauthredirect` в app/ не существует.
+ *
+ * Что происходит здесь:
+ * - Нативный code flow уже обработан expo-auth-session (response вернулся через
+ *   WebBrowser.openAuthSessionAsync, id_token извлечён в useGoogleAuth, логин уже
+ *   выполнен). В query-параметрах в этом случае лежит только `code`, поэтому
+ *   экран просто перенаправляет на корень.
+ * - Если в параметрах всё же оказался `id_token` (web/proxy-флоу), передаём его
+ *   в существующую логику входа (signInWithGoogle), чтобы пользователь
+ *   гарантированно оказался залогинен.
+ *
+ * В любом случае завершаем `router.replace('/')`, чтобы пользователь не видел
+ * "Unmatched Route", а маршрутизация продолжилась через index/(tabs).
+ */
+export default function OAuthRedirectScreen() {
+  const params = useLocalSearchParams<{ id_token?: string; code?: string }>();
+  const router = useRouter();
+  const { signInWithGoogle } = useAuth();
+  const handledRef = useRef(false);
+
+  useEffect(() => {
+    if (handledRef.current) return;
+    handledRef.current = true;
+
+    (async () => {
+      const idToken = params.id_token;
+      if (idToken) {
+        try {
+          await signInWithGoogle(idToken);
+        } catch {
+          // Логин через Google уже мог быть обработан на экране входа;
+          // ошибку здесь показывать нечему — просто уходим на корень.
+        }
+      }
+      router.replace('/');
+    })();
+  }, [params.id_token, router, signInWithGoogle]);
+
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <ActivityIndicator size="large" />
+    </View>
+  );
+}
+</file>
+
+<file path="components/auth/AuthError.tsx">
+import { StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { useThemePalette } from '@/hooks/use-theme-palette';
 
-type Props = TextInputProps & {
-  label: string;
-};
-
-export function AuthField({ label, style, ...props }: Props) {
+/** Единый баннер ошибки для экранов авторизации. */
+export function AuthError({ message }: { message: string }) {
   const p = useThemePalette();
+
   return (
-    <View style={styles.wrap}>
-      <Text style={[styles.label, { color: p.textMuted }]}>{label}</Text>
-      <TextInput
-        placeholderTextColor={p.textMuted}
-        style={[
-          styles.input,
-          {
-            backgroundColor: p.card,
-            borderColor: p.border,
-            color: '#ffffff',
-          },
-          style,
-        ]}
-        autoCapitalize="none"
-        {...props}
-      />
+    <View
+      style={[
+        styles.wrap,
+        { backgroundColor: `${p.danger}0D`, borderColor: `${p.danger}2E` },
+      ]}>
+      <Ionicons name="warning" size={18} color={p.danger} />
+      <Text style={[styles.text, { color: p.danger }]}>{message}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: 8 },
-  label: { fontSize: 14, fontWeight: '600', marginLeft: 4 },
-  input: {
+  wrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    fontSize: 16,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 16,
+  },
+  text: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '500',
   },
 });
-````
+</file>
 
-## File: components/auth/AuthHeader.tsx
-````typescript
-import { useRouter } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+<file path="components/auth/AuthField.tsx">
+import { useState, type ComponentProps } from 'react';
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type TextInputProps,
+  type ViewStyle,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+
+import { useThemePalette } from '@/hooks/use-theme-palette';
+
+export type AuthFieldStatus = 'idle' | 'valid' | 'invalid' | 'loading';
+
+type Props = TextInputProps & {
+  label: string;
+  icon: ComponentProps<typeof Ionicons>['name'];
+  /** Визуальный статус: иконка справа и цвет рамки. */
+  status?: AuthFieldStatus;
+  /** Текст ошибки под полем (рамка становится красной). */
+  error?: string;
+  /** Нейтральная подсказка под полем. */
+  hint?: string;
+  /** Показать кнопку «показать/скрыть пароль». */
+  secure?: boolean;
+  containerStyle?: ViewStyle;
+};
+
+/**
+ * Единое поле ввода для экранов авторизации: лейбл, иконка, рамка с фокусом,
+ * статус-иконка, переключатель видимости пароля, ошибка/подсказка снизу.
+ * Рамка всегда одной толщины (меняется только цвет) — интерфейс не «прыгает».
+ */
+export function AuthField({
+  label,
+  icon,
+  status = 'idle',
+  error,
+  hint,
+  secure,
+  containerStyle,
+  style,
+  onFocus,
+  onBlur,
+  ...inputProps
+}: Props) {
+  const p = useThemePalette();
+  const [focused, setFocused] = useState(false);
+  const [visible, setVisible] = useState(false);
+
+  const hasError = Boolean(error) || status === 'invalid';
+  const borderColor = hasError ? p.danger : focused ? p.primary : p.border;
+  const iconColor = hasError ? p.danger : focused ? p.primary : p.textMuted;
+
+  return (
+    <View style={containerStyle}>
+      <Text style={[styles.label, { color: p.textMuted }]}>{label}</Text>
+
+      <View style={[styles.row, { backgroundColor: p.card, borderColor }]}>
+        <Ionicons name={icon} size={20} color={iconColor} />
+
+        <TextInput
+          placeholderTextColor="#9AA4B8"
+          selectionColor={p.primary}
+          autoCapitalize="none"
+          {...inputProps}
+          secureTextEntry={secure ? !visible : inputProps.secureTextEntry}
+          onFocus={(e) => {
+            setFocused(true);
+            onFocus?.(e);
+          }}
+          onBlur={(e) => {
+            setFocused(false);
+            onBlur?.(e);
+          }}
+          style={[styles.input, { color: p.text }, style]}
+        />
+
+        {status === 'loading' && (
+          <ActivityIndicator size="small" color={p.primary} style={styles.status} />
+        )}
+        {status === 'valid' && (
+          <Ionicons
+            name="checkmark-circle"
+            size={22}
+            color={p.accent}
+            style={styles.status}
+          />
+        )}
+        {status === 'invalid' && (
+          <Ionicons
+            name="close-circle"
+            size={22}
+            color={p.danger}
+            style={styles.status}
+          />
+        )}
+
+        {secure && (
+          <Pressable
+            onPress={() => setVisible((v) => !v)}
+            hitSlop={8}
+            style={styles.eye}>
+            <Ionicons
+              name={visible ? 'eye-outline' : 'eye-off-outline'}
+              size={20}
+              color={p.textMuted}
+            />
+          </Pressable>
+        )}
+      </View>
+
+      {error ? (
+        <View style={styles.errorRow}>
+          <Ionicons name="alert-circle" size={14} color={p.danger} />
+          <Text style={[styles.errorText, { color: p.danger }]}>{error}</Text>
+        </View>
+      ) : hint ? (
+        <Text style={[styles.hintText, { color: p.textMuted }]}>{hint}</Text>
+      ) : null}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  label: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  input: {
+    flex: 1,
+    paddingVertical: 16,
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  status: {
+    width: 24,
+  },
+  eye: {
+    width: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    marginLeft: 4,
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  hintText: {
+    fontSize: 13,
+    marginTop: 8,
+    marginLeft: 4,
+  },
+});
+</file>
+
+<file path="components/auth/AuthFooterLink.tsx">
+import { Link, type Href } from 'expo-router';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { useThemePalette } from '@/hooks/use-theme-palette';
 
 type Props = {
-  title?: string;
-  subtitle?: string;
-  showBack?: boolean;
+  text: string;
+  linkText: string;
+  href: Href;
 };
 
-export function AuthHeader({
-  title = 'English Flow',
-  subtitle = 'Учите 160 фраз по уровням A1–B2',
-  showBack = false,
-}: Props) {
+/** Нижняя строка-ссылка: «Уже есть аккаунт? Войти». */
+export function AuthFooterLink({ text, linkText, href }: Props) {
   const p = useThemePalette();
-  const router = useRouter();
 
   return (
-    <View style={styles.wrap}>
-      {showBack ? (
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [styles.back, pressed && { opacity: 0.6 }]}>
-          <Text style={[styles.backIcon, { color: p.text }]}>←</Text>
-        </Pressable>
-      ) : (
-        <View style={styles.backPlaceholder} />
-      )}
-      <Text style={[styles.title, { color: p.text }]}>{title}</Text>
-      <Text style={[styles.sub, { color: p.textMuted }]}>{subtitle}</Text>
+    <View style={styles.row}>
+      <Text style={[styles.text, { color: p.textMuted }]}>{text} </Text>
+      <Link href={href} style={[styles.link, { color: p.primary }]}>
+        {linkText}
+      </Link>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { marginBottom: 28 },
-  back: { marginBottom: 12, alignSelf: 'flex-start' },
-  backPlaceholder: { height: 8 },
-  backIcon: { fontSize: 28, fontWeight: '600' },
-  title: { fontSize: 32, fontWeight: '800', marginBottom: 8 },
-  sub: { fontSize: 15, lineHeight: 22 },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 28,
+  },
+  text: {
+    fontSize: 15,
+  },
+  link: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
 });
-````
+</file>
 
-## File: components/auth/AuthInput.tsx
-````typescript
-import { StyleSheet, TextInput, type TextInputProps } from 'react-native';
+<file path="components/auth/AuthHeader.tsx">
+import type { ComponentProps } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { useThemePalette } from '@/hooks/use-theme-palette';
 
-export function AuthInput(props: TextInputProps) {
+type Props = {
+  icon: ComponentProps<typeof Ionicons>['name'];
+  title: string;
+  subtitle: string;
+  /** Если передан — слева сверху рисуется кнопка «назад». */
+  onBack?: () => void;
+};
+
+/**
+ * Единая шапка для всех экранов авторизации:
+ * кнопка «назад» + иконка-бейдж + заголовок + подзаголовок.
+ */
+export function AuthHeader({ icon, title, subtitle, onBack }: Props) {
   const p = useThemePalette();
+
   return (
-    <TextInput
-      placeholderTextColor="#9AA4B8"
-      selectionColor="#60A5FA"
-      autoCapitalize="none"
-      {...props}
-      style={[
-        styles.input,
-        {
-          backgroundColor: p.card,
-          borderColor: p.border,
-        },
-        props.style,
-        { color: '#ffffff' },
-      ]}
-    />
+    <View style={styles.wrap}>
+      {onBack && (
+        <Pressable
+          onPress={onBack}
+          hitSlop={8}
+          style={({ pressed }) => [
+            styles.back,
+            { backgroundColor: p.card },
+            pressed && { opacity: 0.7 },
+          ]}>
+          <Ionicons name="chevron-back" size={22} color={p.text} />
+        </Pressable>
+      )}
+
+      <View style={styles.header}>
+        <View style={[styles.badge, { backgroundColor: `${p.primary}14` }]}>
+          <Ionicons name={icon} size={28} color={p.primary} />
+        </View>
+        <Text style={[styles.title, { color: p.text }]}>{title}</Text>
+        <Text style={[styles.subtitle, { color: p.textMuted }]}>{subtitle}</Text>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  input: {
-    borderWidth: 1.5,
-    borderRadius: 16,
-    paddingVertical: 18,
-    paddingHorizontal: 16,
-    fontSize: 15,
+  wrap: {
+    marginBottom: 28,
+  },
+  back: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  header: {
+    alignItems: 'center',
+  },
+  badge: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  title: {
+    fontSize: 30,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 16,
+    lineHeight: 24,
+    textAlign: 'center',
+  },
+});
+</file>
+
+<file path="components/auth/AuthSocial.tsx">
+import { StyleSheet, Text, View } from 'react-native';
+
+import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
+import { useThemePalette } from '@/hooks/use-theme-palette';
+
+type Props = {
+  onSuccess: (idToken: string) => void | Promise<void>;
+  loading?: boolean;
+  dividerText?: string;
+};
+
+/** Разделитель «или» + кнопка входа через Google. */
+export function AuthSocial({
+  onSuccess,
+  loading,
+  dividerText = 'или продолжите через',
+}: Props) {
+  const p = useThemePalette();
+
+  return (
+    <View>
+      <View style={styles.divider}>
+        <View style={[styles.line, { backgroundColor: p.border }]} />
+        <Text style={[styles.dividerText, { color: p.textMuted }]}>
+          {dividerText}
+        </Text>
+        <View style={[styles.line, { backgroundColor: p.border }]} />
+      </View>
+
+      <GoogleSignInButton onSuccess={onSuccess} loading={loading} />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 20,
+  },
+  line: {
+    flex: 1,
+    height: 1,
+  },
+  dividerText: {
+    fontSize: 13,
     fontWeight: '500',
   },
 });
-````
+</file>
 
-## File: components/auth/SocialAuthRow.tsx
-````typescript
+<file path="components/auth/CreateAccountScreen.tsx">
+import { useEffect, useState } from 'react';
+import {
+  Alert,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  type KeyboardTypeOptions,
+} from 'react-native';
+
+type FieldErrors = {
+  code?: string;
+  username?: string;
+  password?: string;
+  confirmPassword?: string;
+};
+
+type FieldRowProps = {
+  icon: string;
+  placeholder: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  error?: string;
+  secureTextEntry?: boolean;
+  onToggleSecure?: () => void;
+  keyboardType?: KeyboardTypeOptions;
+  maxLength?: number;
+  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+};
+
+function FieldRow({
+  icon,
+  placeholder,
+  value,
+  onChangeText,
+  error,
+  secureTextEntry = false,
+  onToggleSecure,
+  keyboardType,
+  maxLength,
+  autoCapitalize,
+}: FieldRowProps) {
+  return (
+    <View>
+      <View style={styles.fieldRow}>
+        <Text style={styles.fieldIcon}>{icon}</Text>
+        <TextInput
+          style={styles.input}
+          placeholder={placeholder}
+          placeholderTextColor="#AAAAAA"
+          value={value}
+          onChangeText={onChangeText}
+          secureTextEntry={secureTextEntry}
+          keyboardType={keyboardType}
+          maxLength={maxLength}
+          autoCapitalize={autoCapitalize}
+          underlineColorAndroid="transparent"
+        />
+        {onToggleSecure ? (
+          <TouchableOpacity
+            style={styles.eyeButton}
+            onPress={onToggleSecure}
+            hitSlop={8}
+          >
+            <Text style={styles.eyeIcon}>{secureTextEntry ? '👁️' : '🙈'}</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+      {error ? <Text style={styles.fieldError}>{error}</Text> : null}
+    </View>
+  );
+}
+
+export default function CreateAccountScreen() {
+  const [code, setCode] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [seconds, setSeconds] = useState(30);
+
+  // Тикающий таймер: обратный отсчёт с 30 до 0 секунд.
+  useEffect(() => {
+    if (seconds <= 0) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      setSeconds((prev) => prev - 1);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [seconds]);
+
+  const handleBack = () => {
+    // Здесь подключите навигацию по месту, например router.back().
+  };
+
+  const handleResend = () => {
+    if (seconds > 0) {
+      return;
+    }
+    // Повторная отправка кода: сбрасываем таймер заново на 30 секунд.
+    setSeconds(30);
+  };
+
+  const clearError = (field: keyof FieldErrors) => {
+    setErrors((prev) => (prev[field] ? { ...prev, [field]: undefined } : prev));
+  };
+
+  const handleSubmit = () => {
+    const newErrors: FieldErrors = {};
+
+    // Код: ровно 6 цифр.
+    if (!/^\d{6}$/.test(code.trim())) {
+      newErrors.code = 'Код должен состоять из 6 цифр';
+    }
+
+    // Имя пользователя: не короче 3 символов.
+    if (username.trim().length < 3) {
+      newErrors.username = 'Имя должно быть не короче 3 символов';
+    }
+
+    // Пароль: не менее 6 символов.
+    if (password.length < 6) {
+      newErrors.password = 'Пароль должен быть не менее 6 символов';
+    }
+
+    // Подтверждение пароля: строгое совпадение с первым паролем.
+    if (confirmPassword !== password) {
+      newErrors.confirmPassword = 'Пароли не совпадают';
+    }
+
+    setErrors(newErrors);
+
+    const hasErrors = Object.keys(newErrors).length > 0;
+    if (!hasErrors) {
+      Alert.alert('Успешная регистрация!');
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+
+      <ScrollView
+        style={styles.safeArea}
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Шапка: стрелка назад */}
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={handleBack}
+          hitSlop={12}
+        >
+          <Text style={styles.backIcon}>{'<'}</Text>
+        </TouchableOpacity>
+
+        {/* Блок заголовка */}
+        <View style={styles.header}>
+          <Text style={styles.title}>Создать аккаунт</Text>
+          <Text style={styles.subtitle}>
+            Введите код из письма и завершите регистрацию
+          </Text>
+        </View>
+
+        {/* Центральный блок полей ввода (Card Style) */}
+        <View style={styles.card}>
+          <FieldRow
+            icon="✓"
+            placeholder="Код из письма"
+            value={code}
+            onChangeText={(text) => {
+              setCode(text);
+              clearError('code');
+            }}
+            error={errors.code}
+            keyboardType="numeric"
+            maxLength={6}
+          />
+
+          <View style={styles.divider} />
+
+          <FieldRow
+            icon="👤"
+            placeholder="Имя пользователя"
+            value={username}
+            onChangeText={(text) => {
+              setUsername(text);
+              clearError('username');
+            }}
+            error={errors.username}
+            autoCapitalize="none"
+          />
+
+          <View style={styles.divider} />
+
+          <FieldRow
+            icon="🔒"
+            placeholder="Пароль"
+            value={password}
+            onChangeText={(text) => {
+              setPassword(text);
+              clearError('password');
+              clearError('confirmPassword');
+            }}
+            error={errors.password}
+            secureTextEntry={!showPassword}
+            onToggleSecure={() => setShowPassword((prev) => !prev)}
+          />
+
+          <View style={styles.divider} />
+
+          <FieldRow
+            icon="🔒"
+            placeholder="Повторите пароль"
+            value={confirmPassword}
+            onChangeText={(text) => {
+              setConfirmPassword(text);
+              clearError('confirmPassword');
+            }}
+            error={errors.confirmPassword}
+            secureTextEntry={!showConfirmPassword}
+            onToggleSecure={() => setShowConfirmPassword((prev) => !prev)}
+          />
+        </View>
+
+        {/* Блок повторной отправки кода (под карточкой, перед кнопкой) */}
+        <View style={styles.resendRow}>
+          <Text style={styles.resendText}>Не пришёл код? </Text>
+          <TouchableOpacity
+            onPress={handleResend}
+            disabled={seconds > 0}
+            hitSlop={8}
+          >
+            <Text
+              style={[
+                styles.resendLink,
+                seconds > 0 ? styles.resendLinkDisabled : null,
+              ]}
+            >
+              Отправить повторно
+            </Text>
+          </TouchableOpacity>
+          {seconds > 0 ? (
+            <Text style={styles.resendText}> через {seconds} сек</Text>
+          ) : null}
+        </View>
+
+        {/* Основная кнопка */}
+        <TouchableOpacity
+          style={styles.button}
+          onPress={handleSubmit}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.buttonText}>Создать аккаунт</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  container: {
+    flexGrow: 1,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 24,
+    paddingTop: 8,
+    paddingBottom: 32,
+  },
+  backButton: {
+    alignSelf: 'flex-start',
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: -8,
+    marginBottom: 4,
+  },
+  backIcon: {
+    fontSize: 30,
+    lineHeight: 34,
+    color: '#000000',
+  },
+  header: {
+    marginTop: 8,
+    marginBottom: 28,
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#000000',
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    marginTop: 8,
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#555555',
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.07,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  fieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    minHeight: 58,
+  },
+  fieldIcon: {
+    width: 24,
+    marginRight: 12,
+    fontSize: 18,
+    textAlign: 'center',
+    color: '#999999',
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: 14,
+    color: '#222222',
+  },
+  eyeButton: {
+    padding: 6,
+    marginLeft: 8,
+  },
+  eyeIcon: {
+    fontSize: 20,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#EEEEEE',
+    marginLeft: 52,
+  },
+  fieldError: {
+    paddingHorizontal: 52,
+    paddingBottom: 8,
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#E53935',
+  },
+  resendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    marginTop: 20,
+  },
+  resendText: {
+    fontSize: 14,
+    color: '#888888',
+  },
+  resendLink: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6C63FF',
+  },
+  resendLinkDisabled: {
+    color: '#BBBBBB',
+    fontWeight: '400',
+  },
+  button: {
+    marginTop: 28,
+    paddingVertical: 16,
+    borderRadius: 12,
+    backgroundColor: '#E8E8E8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#333333',
+  },
+});
+</file>
+
+<file path="components/auth/GoogleSignInButton.tsx">
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native';
+
+import { SocialIcon } from '@/components/ui/SocialIcon';
+import { useGoogleAuth } from '@/hooks/useGoogleAuth';
+import { useThemePalette } from '@/hooks/use-theme-palette';
+
+type Props = {
+  /** Вызывается с полученным id_token, чтобы родитель отправил его на бэкенд. */
+  onSuccess: (idToken: string) => void | Promise<void>;
+  /** Внешний флаг загрузки (например, пока идёт запрос к бэкенду). */
+  loading?: boolean;
+};
+
+export function GoogleSignInButton({ onSuccess, loading = false }: Props) {
+  const p = useThemePalette();
+  const { promptAsync, idToken, loading: authLoading } = useGoogleAuth();
+  const [submitting, setSubmitting] = useState(false);
+  const notifiedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (idToken && notifiedRef.current !== idToken) {
+      notifiedRef.current = idToken;
+      void onSuccess(idToken);
+    }
+  }, [idToken, onSuccess]);
+
+  const onPress = async () => {
+    if (authLoading || submitting || loading) return;
+    try {
+      setSubmitting(true);
+      await promptAsync();
+    } catch {
+      // Окно входа ещё не готово или пользователь прервал процесс — игнорируем.
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const disabled = authLoading || submitting || loading;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => [
+        styles.button,
+        { borderColor: p.border },
+        pressed && styles.pressed,
+        disabled && styles.disabled,
+      ]}>
+      {submitting || loading ? (
+        <ActivityIndicator color="#1A1A1A" />
+      ) : (
+        <>
+          <SocialIcon provider="google" size={20} />
+          <Text style={styles.text}>Войти через Google</Text>
+        </>
+      )}
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  button: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    backgroundColor: '#FFFFFF',
+    minWidth: 140,
+  },
+  pressed: {
+    opacity: 0.8,
+  },
+  disabled: {
+    opacity: 0.6,
+  },
+  text: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1A1A1A',
+  },
+});
+</file>
+
+<file path="components/auth/SocialAuthRow.tsx">
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -2290,7 +3729,6 @@ import { useThemePalette } from '@/hooks/use-theme-palette';
 const providers = [
   { id: 'google', icon: 'logo-google' as const, label: 'Google', color: '#EA4335' },
   { id: 'apple', icon: 'logo-apple' as const, label: 'Apple', color: '#000' },
-  { id: 'telegram', icon: 'paper-plane' as const, label: 'Telegram', color: '#0088cc' },
 ];
 
 export function SocialAuthRow() {
@@ -2340,10 +3778,50 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 });
-````
+</file>
 
-## File: components/learn/FlashCard.tsx
-````typescript
+<file path="components/auth/SocialIcon.tsx">
+import React from 'react';
+import Svg, { Path } from 'react-native-svg';
+import { Ionicons } from '@expo/vector-icons';
+
+type SocialProvider = 'google' | 'apple';
+
+interface SocialIconProps {
+  provider: SocialProvider;
+  size?: number;
+}
+
+export function SocialIcon({ provider, size = 24 }: SocialIconProps) {
+  if (provider === 'google') {
+    // Official Google "G" logo (multi-color) from Google brand resources
+    return (
+      <Svg width={size} height={size} viewBox="0 0 48 48">
+        <Path
+          fill="#EA4335"
+          d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+        />
+        <Path
+          fill="#4285F4"
+          d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+        />
+        <Path
+          fill="#FBBC05"
+          d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
+        />
+        <Path
+          fill="#34A853"
+          d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+        />
+      </Svg>
+    );
+  }
+
+  return <Ionicons name="logo-apple" size={size} color="#000000" />;
+}
+</file>
+
+<file path="components/learn/FlashCard.tsx">
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
@@ -2421,7 +3899,7 @@ export function FlashCard({ phrase, loading }: Props) {
           <Text style={[styles.hint, { color: p.textMuted }]}>Нажмите, чтобы перевернуть</Text>
         </View>
         <Text style={[styles.main, { color: p.text }]}>{phrase.en}</Text>
-        <Text style={[styles.side, { color: p.primary }]}>EN → RU</Text>
+        <Text style={[styles.side, { color: p.primary }]}>Англ → Рус</Text>
       </Animated.View>
 
       <Animated.View
@@ -2461,10 +3939,139 @@ const styles = StyleSheet.create({
   main: { fontSize: 28, fontWeight: '800', textAlign: 'center', lineHeight: 36 },
   side: { fontSize: 15, textAlign: 'center', fontWeight: '600' },
 });
-````
+</file>
 
-## File: components/learn/PhraseCard.tsx
-````typescript
+<file path="components/learn/HomeIllustration.tsx">
+import { MaterialIcons } from '@expo/vector-icons';
+import { StyleSheet, Text, View } from 'react-native';
+
+type Props = {
+  variant: 'flashcards' | 'games';
+};
+
+const PASTELS = {
+  lavender: '#EDE9FE',
+  mint: '#DCFCE7',
+  peach: '#FFEDD5',
+  sky: '#E0F2FE',
+  rose: '#FFE4E6',
+};
+
+const ICON_COLORS = {
+  primary: '#5B5FEF',
+  violet: '#8B5CF6',
+  green: '#22C55E',
+  orange: '#F97316',
+  pink: '#EC4899',
+  blue: '#3B82F6',
+};
+
+export function HomeIllustration({ variant }: Props) {
+  if (variant === 'flashcards') {
+    return (
+      <View style={styles.wrap}>
+        <View style={[styles.circleLarge, { backgroundColor: PASTELS.lavender }]} />
+        <View style={[styles.circleSmall, { backgroundColor: PASTELS.sky, right: 18, top: 14 }]} />
+        <View style={[styles.cardStack, styles.card1, { borderColor: ICON_COLORS.primary }]}>
+          <MaterialIcons name="style" size={40} color={ICON_COLORS.primary} />
+        </View>
+        <View style={[styles.cardStack, styles.card2, { borderColor: ICON_COLORS.violet }]}>
+          <MaterialIcons name="style" size={40} color={ICON_COLORS.violet} />
+        </View>
+        <View style={[styles.cardStack, styles.card3, { borderColor: ICON_COLORS.primary }]}>
+          <MaterialIcons name="style" size={40} color={ICON_COLORS.primary} />
+        </View>
+        <View style={[styles.badge, { backgroundColor: ICON_COLORS.green }]}>
+          <MaterialIcons name="star" size={18} color="#fff" />
+        </View>
+        <Text style={styles.emoji}>📚</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.wrap}>
+      <View style={[styles.circleLarge, { backgroundColor: PASTELS.peach }]} />
+      <View style={[styles.circleSmall, { backgroundColor: PASTELS.mint, right: 22, top: 12 }]} />
+      <MaterialIcons name="star" size={16} color={ICON_COLORS.orange} style={styles.star1} />
+      <MaterialIcons name="star" size={12} color={ICON_COLORS.pink} style={styles.star2} />
+      <MaterialIcons name="star" size={14} color={ICON_COLORS.blue} style={styles.star3} />
+      <View style={[styles.controllerCircle, { backgroundColor: PASTELS.rose }]}>
+        <MaterialIcons name="sports-esports" size={46} color={ICON_COLORS.pink} />
+      </View>
+      <View style={[styles.badge, { backgroundColor: ICON_COLORS.green }]}>
+        <MaterialIcons name="check" size={18} color="#fff" />
+      </View>
+      <Text style={styles.emoji}>🎮</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrap: {
+    width: 132,
+    height: 132,
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  circleLarge: {
+    position: 'absolute',
+    width: 108,
+    height: 108,
+    borderRadius: 54,
+  },
+  circleSmall: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  cardStack: {
+    position: 'absolute',
+    width: 64,
+    height: 76,
+    borderRadius: 12,
+    borderWidth: 2,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  card1: { transform: [{ rotate: '-12deg' }, { translateX: -26 }, { translateY: 6 }] },
+  card2: { transform: [{ rotate: '0deg' }, { translateY: 0 }] },
+  card3: { transform: [{ rotate: '12deg' }, { translateX: 26 }, { translateY: 6 }] },
+  controllerCircle: {
+    width: 74,
+    height: 74,
+    borderRadius: 37,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badge: {
+    position: 'absolute',
+    right: 8,
+    bottom: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  star1: { position: 'absolute', left: 18, top: 22 },
+  star2: { position: 'absolute', right: 20, top: 34 },
+  star3: { position: 'absolute', left: 30, bottom: 18 },
+  emoji: {
+    position: 'absolute',
+    right: 6,
+    top: 10,
+    fontSize: 18,
+  },
+});
+</file>
+
+<file path="components/learn/PhraseCard.tsx">
 import { StyleSheet, Text, View } from 'react-native';
 
 import { LevelBadge } from '@/components/ui/LevelBadge';
@@ -2522,10 +4129,9 @@ const styles = StyleSheet.create({
   en: { fontSize: 24, fontWeight: '700', lineHeight: 32 },
   ru: { fontSize: 17, lineHeight: 24 },
 });
-````
+</file>
 
-## File: components/ui/AppButton.tsx
-````typescript
+<file path="components/ui/AppButton.tsx">
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   ActivityIndicator,
@@ -2541,9 +4147,11 @@ type Props = {
   title: string;
   onPress: () => void;
   loading?: boolean;
-  variant?: 'primary' | 'ghost' | 'danger';
+  variant?: 'primary' | 'ghost' | 'danger' | 'light';
   style?: ViewStyle;
   disabled?: boolean;
+  gradientColors?: readonly [string, string, ...string[]];
+  buttonRadius?: number;
 };
 
 export function AppButton({
@@ -2553,6 +4161,8 @@ export function AppButton({
   variant = 'primary',
   style,
   disabled,
+  gradientColors,
+  buttonRadius = 16,
 }: Props) {
   const p = useThemePalette();
 
@@ -2563,20 +4173,40 @@ export function AppButton({
         disabled={disabled || loading}
         style={({ pressed }) => [
           styles.wrap,
+          { borderRadius: buttonRadius },
           style,
           (pressed || disabled) && { opacity: 0.85 },
         ]}>
         <LinearGradient
-          colors={[...p.gradient]}
+          colors={gradientColors ? gradientColors : p.gradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.gradient}>
+          style={[styles.gradient, { borderRadius: buttonRadius }]}>
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
             <Text style={styles.primaryText}>{title}</Text>
           )}
         </LinearGradient>
+      </Pressable>
+    );
+  }
+
+  if (variant === 'light') {
+    return (
+      <Pressable
+        onPress={onPress}
+        disabled={disabled || loading}
+        style={({ pressed }) => [
+          styles.lightButton,
+          style,
+          (pressed || disabled) && { opacity: 0.85 },
+        ]}>
+        {loading ? (
+          <ActivityIndicator color="#333" />
+        ) : (
+          <Text style={styles.lightButtonText}>{title}</Text>
+        )}
       </Pressable>
     );
   }
@@ -2616,6 +4246,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   primaryText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  lightButton: {
+    paddingVertical: 18,
+    borderRadius: 16,
+    backgroundColor: '#E8E8E8',
+    alignItems: 'center',
+  },
+  lightButtonText: { color: '#333333', fontSize: 16, fontWeight: '700' },
   ghost: {
     paddingVertical: 16,
     borderRadius: 16,
@@ -2624,10 +4261,9 @@ const styles = StyleSheet.create({
   },
   ghostText: { fontSize: 16, fontWeight: '600' },
 });
-````
+</file>
 
-## File: components/ui/collapsible.tsx
-````typescript
+<file path="components/ui/collapsible.tsx">
 import { PropsWithChildren, useState } from 'react';
 import { StyleSheet, TouchableOpacity } from 'react-native';
 
@@ -2673,10 +4309,52 @@ const styles = StyleSheet.create({
     marginLeft: 24,
   },
 });
-````
+</file>
 
-## File: components/ui/icon-symbol.ios.tsx
-````typescript
+<file path="components/ui/FadeIn.tsx">
+import { useEffect, useRef, type PropsWithChildren } from 'react';
+import { Animated, StyleSheet, ViewStyle } from 'react-native';
+
+type Props = PropsWithChildren<{
+  delay?: number;
+  duration?: number;
+  style?: ViewStyle;
+}>;
+
+export function FadeIn({ children, delay = 0, duration = 400, style }: Props) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(12)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration,
+        delay,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration,
+        delay,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [opacity, translateY, duration, delay]);
+
+  return (
+    <Animated.View style={[styles.base, { opacity, transform: [{ translateY }] }, style]}>
+      {children}
+    </Animated.View>
+  );
+}
+
+const styles = StyleSheet.create({
+  base: { width: '100%' },
+});
+</file>
+
+<file path="components/ui/icon-symbol.ios.tsx">
 import { SymbolView, SymbolViewProps, SymbolWeight } from 'expo-symbols';
 import { StyleProp, ViewStyle } from 'react-native';
 
@@ -2709,10 +4387,9 @@ export function IconSymbol({
     />
   );
 }
-````
+</file>
 
-## File: components/ui/icon-symbol.tsx
-````typescript
+<file path="components/ui/icon-symbol.tsx">
 // Fallback for using MaterialIcons on Android and web.
 
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -2742,6 +4419,7 @@ const MAPPING = {
   'plus': 'add',
   'gear': 'settings',
   'gamecontroller.fill': 'sports-esports',
+  'star.fill': 'star',
 } as IconMapping;
 
 /**
@@ -2763,10 +4441,9 @@ export function IconSymbol({
 }) {
   return <MaterialIcons color={color} size={size} name={MAPPING[name]} style={style} />;
 }
-````
+</file>
 
-## File: components/ui/LevelBadge.tsx
-````typescript
+<file path="components/ui/LevelBadge.tsx">
 import { StyleSheet, Text, View } from 'react-native';
 
 import { LevelColors } from '@/constants/design';
@@ -2790,10 +4467,90 @@ const styles = StyleSheet.create({
   },
   text: { fontSize: 12, fontWeight: '700' },
 });
-````
+</file>
 
-## File: components/ui/Screen.tsx
-````typescript
+<file path="components/ui/ProgressRing.tsx">
+import { StyleSheet, Text, View } from 'react-native';
+import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
+
+import { useThemePalette } from '@/hooks/use-theme-palette';
+
+type Props = {
+  size?: number;
+  strokeWidth?: number;
+  progress: number; // 0..1
+  label: string;
+  value: string;
+};
+
+export function ProgressRing({
+  size = 140,
+  strokeWidth = 12,
+  progress,
+  label,
+  value,
+}: Props) {
+  const p = useThemePalette();
+  const clamped = Math.min(1, Math.max(0, progress));
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference * (1 - clamped);
+
+  return (
+    <View style={{ width: size, height: size }}>
+      <Svg width={size} height={size}>
+        <Defs>
+          <LinearGradient id="ringGradient" x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor={p.gradient[0]} />
+            <Stop offset="0.5" stopColor={p.gradient[1]} />
+            <Stop offset="1" stopColor={p.gradient[2]} />
+          </LinearGradient>
+        </Defs>
+        {/* Подложка */}
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke={p.border}
+          strokeWidth={strokeWidth}
+          fill="none"
+        />
+        {/* Дуга прогресса */}
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="url(#ringGradient)"
+          strokeWidth={strokeWidth}
+          fill="none"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          rotation={-90}
+          origin={`${size / 2}, ${size / 2}`}
+        />
+      </Svg>
+      <View style={styles.center}>
+        <Text style={[styles.value, { color: p.text }]}>{value}</Text>
+        <Text style={[styles.label, { color: p.textMuted }]}>{label}</Text>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  center: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  value: { fontSize: 24, fontWeight: '800' },
+  label: { fontSize: 12 },
+});
+</file>
+
+<file path="components/ui/Screen.tsx">
 import { LinearGradient } from 'expo-linear-gradient';
 import type { ReactElement } from 'react';
 import {
@@ -2812,6 +4569,7 @@ import { useThemePalette } from '@/hooks/use-theme-palette';
 type Props = ViewProps & {
   scroll?: boolean;
   padded?: boolean;
+  glow?: boolean;
   refreshControl?: ReactElement<RefreshControlProps>;
 };
 
@@ -2819,6 +4577,7 @@ export function Screen({
   children,
   scroll,
   padded = true,
+  glow = true,
   style,
   refreshControl,
   ...rest
@@ -2840,10 +4599,12 @@ export function Screen({
 
   return (
     <View style={[styles.root, { backgroundColor: p.bg }]}>
-      <LinearGradient
-        colors={[`${p.primary}22`, 'transparent']}
-        style={styles.glow}
-      />
+      {glow && (
+        <LinearGradient
+          colors={[`${p.primary}22`, 'transparent']}
+          style={styles.glow}
+        />
+      )}
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -2874,10 +4635,65 @@ const styles = StyleSheet.create({
     height: 220,
   },
 });
-````
+</file>
 
-## File: components/ui/StatCard.tsx
-````typescript
+<file path="components/ui/SocialIcon.tsx">
+import React from 'react';
+import Svg, { Path } from 'react-native-svg';
+
+export type SocialProvider = 'google' | 'apple';
+
+interface SocialIconProps {
+  provider: SocialProvider;
+  size?: number;
+  /** Used for single-color glyphs (black apple). Ignored for Google. */
+  color?: string;
+}
+
+/**
+ * Official Google "G" logo — red / yellow / green / blue.
+ * Source: Google Brand Resources — "Sign in with Google" button asset.
+ */
+const GOOGLE_G_PATHS = [
+  { fill: '#EA4335', d: 'M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z' },
+  { fill: '#4285F4', d: 'M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z' },
+  { fill: '#FBBC05', d: 'M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z' },
+  { fill: '#34A853', d: 'M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z' },
+];
+
+/** Apple logo glyph (viewBox 0 0 24 24). */
+const APPLE_PATH =
+  'M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 ' +
+  '3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.03 ' +
+  '1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 ' +
+  '3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-' +
+  '.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 ' +
+  '1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-' +
+  '3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.56-1.702';
+
+export function SocialIcon({ provider, size = 24, color = '#000000' }: SocialIconProps) {
+  switch (provider) {
+    case 'google':
+      return (
+        <Svg width={size} height={size} viewBox="0 0 48 48">
+          {GOOGLE_G_PATHS.map((p) => (
+            <Path key={p.fill} fill={p.fill} d={p.d} />
+          ))}
+        </Svg>
+      );
+    case 'apple':
+    default:
+      return (
+        <Svg width={size} height={size} viewBox="0 0 24 24">
+          <Path fill={color} d={APPLE_PATH} />
+        </Svg>
+      );
+  }
+}
+</file>
+
+<file path="components/ui/StatCard.tsx">
+import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { useThemePalette } from '@/hooks/use-theme-palette';
@@ -2886,12 +4702,30 @@ type Props = {
   label: string;
   value: string | number;
   accent?: string;
+  icon?: string;
+  highlight?: boolean;
 };
 
-export function StatCard({ label, value, accent }: Props) {
+export function StatCard({ label, value, accent, icon, highlight }: Props) {
   const p = useThemePalette();
+
+  if (highlight) {
+    return (
+      <LinearGradient
+        colors={p.gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.card}>
+        {icon ? <Text style={styles.icon}>{icon}</Text> : null}
+        <Text style={[styles.value, styles.valueOnGradient]}>{value}</Text>
+        <Text style={[styles.label, styles.labelOnGradient]}>{label}</Text>
+      </LinearGradient>
+    );
+  }
+
   return (
-    <View style={[styles.card, { backgroundColor: p.card, borderColor: p.border }]}>
+    <View style={[styles.card, { backgroundColor: p.card, borderColor: p.border, borderWidth: 1 }]}>
+      {icon ? <Text style={styles.icon}>{icon}</Text> : null}
       <Text style={[styles.value, accent ? { color: accent } : { color: p.primary }]}>
         {value}
       </Text>
@@ -2906,16 +4740,17 @@ const styles = StyleSheet.create({
     minWidth: '45%',
     padding: 16,
     borderRadius: 16,
-    borderWidth: 1,
     gap: 4,
   },
+  icon: { fontSize: 20, marginBottom: 2 },
   value: { fontSize: 26, fontWeight: '800' },
+  valueOnGradient: { color: '#fff' },
   label: { fontSize: 13 },
+  labelOnGradient: { color: 'rgba(255,255,255,0.9)', fontWeight: '600' },
 });
-````
+</file>
 
-## File: components/external-link.tsx
-````typescript
+<file path="components/external-link.tsx">
 import { Href, Link } from 'expo-router';
 import { openBrowserAsync, WebBrowserPresentationStyle } from 'expo-web-browser';
 import { type ComponentProps } from 'react';
@@ -2941,10 +4776,9 @@ export function ExternalLink({ href, ...rest }: Props) {
     />
   );
 }
-````
+</file>
 
-## File: components/haptic-tab.tsx
-````typescript
+<file path="components/haptic-tab.tsx">
 import { BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
 import { PlatformPressable } from '@react-navigation/elements';
 import * as Haptics from 'expo-haptics';
@@ -2963,10 +4797,9 @@ export function HapticTab(props: BottomTabBarButtonProps) {
     />
   );
 }
-````
+</file>
 
-## File: components/hello-wave.tsx
-````typescript
+<file path="components/hello-wave.tsx">
 import Animated from 'react-native-reanimated';
 
 export function HelloWave() {
@@ -2986,10 +4819,9 @@ export function HelloWave() {
     </Animated.Text>
   );
 }
-````
+</file>
 
-## File: components/parallax-scroll-view.tsx
-````typescript
+<file path="components/parallax-scroll-view.tsx">
 import type { PropsWithChildren, ReactElement } from 'react';
 import { StyleSheet } from 'react-native';
 import Animated, {
@@ -3069,10 +4901,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
 });
-````
+</file>
 
-## File: components/themed-text.tsx
-````typescript
+<file path="components/themed-text.tsx">
 import { StyleSheet, Text, type TextProps } from 'react-native';
 
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -3133,10 +4964,9 @@ const styles = StyleSheet.create({
     color: '#0a7ea4',
   },
 });
-````
+</file>
 
-## File: components/themed-view.tsx
-````typescript
+<file path="components/themed-view.tsx">
 import { View, type ViewProps } from 'react-native';
 
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -3151,45 +4981,43 @@ export function ThemedView({ style, lightColor, darkColor, ...otherProps }: Them
 
   return <View style={[{ backgroundColor }, style]} {...otherProps} />;
 }
-````
+</file>
 
-## File: constants/api.ts
-````typescript
+<file path="constants/api.ts">
 /**
  * IP вашего компьютера в локальной Wi‑Fi сети.
  * Узнать: ipconfig (Windows) → IPv4 Address.
  * Телефон и ПК должны быть в одной сети.
  */
 export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ?? 'http://192.168.0.23:8000';
-````
+  process.env.EXPO_PUBLIC_API_URL ?? 'http://10.89.157.250:8000';
+</file>
 
-## File: constants/design.ts
-````typescript
+<file path="constants/design.ts">
 export const Palette = {
   light: {
-    bg: '#F5F5F7',
-    card: '#FFFFFF',
+    bg: '#FFFFFF',
+    card: '#F2F3F5',
     primary: '#5B5FEF',
     primaryDark: '#4347D8',
     accent: '#22C55E',
-    text: '#0F172A',
-    textMuted: '#64748B',
-    border: '#E2E8F0',
+    text: '#1A1A1A',
+    textMuted: '#6B7280',
+    border: '#E5E7EB',
     danger: '#EF4444',
     gradient: ['#5B5FEF', '#8B5CF6', '#EC4899'] as const,
   },
   dark: {
-    bg: '#0B0F1A',
-    card: '#151B2E',
-    primary: '#7C7FFF',
-    primaryDark: '#5B5FEF',
-    accent: '#4ADE80',
-    text: '#F8FAFC',
-    textMuted: '#94A3B8',
-    border: '#1E293B',
-    danger: '#F87171',
-    gradient: ['#4338CA', '#7C3AED', '#DB2777'] as const,
+    bg: '#FFFFFF',
+    card: '#F2F3F5',
+    primary: '#5B5FEF',
+    primaryDark: '#4347D8',
+    accent: '#22C55E',
+    text: '#1A1A1A',
+    textMuted: '#6B7280',
+    border: '#E5E7EB',
+    danger: '#EF4444',
+    gradient: ['#5B5FEF', '#8B5CF6', '#EC4899'] as const,
   },
 };
 
@@ -3201,10 +5029,9 @@ export const LevelColors: Record<string, string> = {
 };
 
 export const Spacing = { xs: 4, sm: 8, md: 16, lg: 24, xl: 32 };
-````
+</file>
 
-## File: constants/theme.ts
-````typescript
+<file path="constants/theme.ts">
 /**
  * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
  * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
@@ -3258,10 +5085,9 @@ export const Fonts = Platform.select({
     mono: "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
   },
 });
-````
+</file>
 
-## File: context/AuthContext.tsx
-````typescript
+<file path="context/AuthContext.tsx">
 import { useRouter, useSegments } from 'expo-router';
 import React, {
   createContext,
@@ -3275,6 +5101,7 @@ import React, {
 import {
   fetchMe,
   loginWithEmailCode,
+  loginWithGoogle,
   loginWithPassword,
   registerWithEmail,
   type User,
@@ -3287,6 +5114,7 @@ type AuthContextValue = {
   isLoading: boolean;
   signInPassword: (email: string, password: string) => Promise<void>;
   signInCode: (email: string, code: string) => Promise<void>;
+  signInWithGoogle: (idToken: string) => Promise<void>;
   signUp: (
     email: string,
     code: string,
@@ -3371,6 +5199,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [applyToken],
   );
 
+  const signInWithGoogle = useCallback(
+    async (idToken: string) => {
+      const { access_token } = await loginWithGoogle(idToken);
+      await applyToken(access_token);
+    },
+    [applyToken],
+  );
+
   const signOut = useCallback(async () => {
     await clearToken();
     setAuthToken(null);
@@ -3389,11 +5225,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isLoading,
       signInPassword,
       signInCode,
+      signInWithGoogle,
       signUp,
       signOut,
       refreshUser,
     }),
-    [user, isLoading, signInPassword, signInCode, signUp, signOut, refreshUser],
+    [
+      user,
+      isLoading,
+      signInPassword,
+      signInCode,
+      signInWithGoogle,
+      signUp,
+      signOut,
+      refreshUser,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -3404,15 +5250,71 @@ export function useAuth() {
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');
   return ctx;
 }
-````
+</file>
 
-## File: hooks/use-color-scheme.ts
-````typescript
+<file path="context/WordsContext.tsx">
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+} from 'react';
+
+export type UserWord = {
+  id: number;
+  en: string;
+  ru: string;
+  level: string;
+  topic: string;
+  isCustom: true;
+};
+
+type WordsContextValue = {
+  customWords: UserWord[];
+  addWord: (en: string, ru: string, level: string) => UserWord;
+};
+
+const WordsContext = createContext<WordsContextValue | null>(null);
+
+let nextId = -1;
+
+export function WordsProvider({ children }: { children: React.ReactNode }) {
+  const [customWords, setCustomWords] = useState<UserWord[]>([]);
+
+  const addWord = useCallback((en: string, ru: string, level: string) => {
+    const word: UserWord = {
+      id: nextId--,
+      en: en.trim(),
+      ru: ru.trim(),
+      level,
+      topic: 'Моё слово',
+      isCustom: true,
+    };
+    setCustomWords((prev) => [word, ...prev]);
+    return word;
+  }, []);
+
+  const value = useMemo(
+    () => ({ customWords, addWord }),
+    [customWords, addWord],
+  );
+
+  return <WordsContext.Provider value={value}>{children}</WordsContext.Provider>;
+}
+
+export function useWords() {
+  const ctx = useContext(WordsContext);
+  if (!ctx) throw new Error('useWords must be used within WordsProvider');
+  return ctx;
+}
+</file>
+
+<file path="hooks/use-color-scheme.ts">
 export { useColorScheme } from 'react-native';
-````
+</file>
 
-## File: hooks/use-color-scheme.web.ts
-````typescript
+<file path="hooks/use-color-scheme.web.ts">
 import { useEffect, useState } from 'react';
 import { useColorScheme as useRNColorScheme } from 'react-native';
 
@@ -3434,10 +5336,9 @@ export function useColorScheme() {
 
   return 'light';
 }
-````
+</file>
 
-## File: hooks/use-theme-color.ts
-````typescript
+<file path="hooks/use-theme-color.ts">
 /**
  * Learn more about light and dark modes:
  * https://docs.expo.dev/guides/color-schemes/
@@ -3459,21 +5360,260 @@ export function useThemeColor(
     return Colors[theme][colorName];
   }
 }
-````
+</file>
 
-## File: hooks/use-theme-palette.ts
-````typescript
+<file path="hooks/use-theme-palette.ts">
 import { Palette } from '@/constants/design';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export function useThemePalette() {
-  const scheme = useColorScheme();
-  return Palette[scheme === 'dark' ? 'dark' : 'light'];
+  // The app is locked to light mode for a clean, minimal look.
+  return Palette.light;
 }
-````
+</file>
 
-## File: hooks/useStudyTimer.ts
-````typescript
+<file path="hooks/useGoogleAuth.ts">
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
+import { useEffect, useState } from 'react';
+
+WebBrowser.maybeCompleteAuthSession();
+
+/**
+ * Хук входа через Google.
+ *
+ * На нативных платформах expo-auth-session (7.x) намеренно использует
+ * authorization code flow (ResponseType.Code): Google не отдаёт id_token напрямую
+ * для Android/iOS OAuth-клиентов. После возврата из браузера библиотека
+ * автоматически обменивает `code` на токены (PKCE) и кладёт id_token в
+ * `response.params.id_token` / `response.authentication.idToken`.
+ *
+ * Redirect URI генерируется библиотекой автоматически через makeRedirectUri():
+ * - Development build: `${applicationId}:/oauthredirect` = `com.samir.ingich:/oauthredirect`
+ *   (схема com.samir.ingich зарегистрирована expo-router в AndroidManifest)
+ * - Expo Go: через Linking.createURL с scheme из app.json
+ *
+ * Хук следит за ответом и возвращает id_token, который затем отправляется
+ * на бэкенд (POST /auth/google).
+ */
+export function useGoogleAuth() {
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    // Все три client id обязательны: библиотека выбирает нужный по платформе
+    // (web -> webClientId, iOS -> iosClientId, Android -> androidClientId)
+    // и бросает ошибку "...ClientId must be defined", если он не передан.
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+  });
+
+  const [idToken, setIdToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (response?.type !== 'success') return;
+
+    // В этой версии expo-auth-session (7.x) id_token лежит в query-параметрах
+    // ответа (response.params.id_token), а после автообмена кода также
+    // доступен в response.authentication?.idToken.
+    const token = response.params.id_token ?? response.authentication?.idToken;
+    if (token) {
+      setIdToken(token);
+    }
+  }, [response]);
+
+  return {
+    promptAsync,
+    idToken,
+    // true, пока auth-запрос ещё не загружен (кнопка входа недоступна).
+    loading: request === null,
+  };
+}
+</file>
+
+<file path="hooks/useResetPassword.ts">
+import { useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert } from 'react-native';
+
+import { forgotPassword, resetPassword } from '@/lib/api/auth';
+import { getApiError } from '@/lib/errors';
+
+const RESEND_SECONDS = 60;
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export type ResetPasswordStep = 'email' | 'reset';
+
+export function useResetPassword() {
+  const router = useRouter();
+
+  const [step, setStep] = useState<ResetPasswordStep>('email');
+  const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Step 1 state
+  const [emailError, setEmailError] = useState('');
+  const [sendingCode, setSendingCode] = useState(false);
+
+  // Step 2 state
+  const [codeError, setCodeError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [resetting, setResetting] = useState(false);
+
+  // Resend timer
+  const [resendIn, setResendIn] = useState(RESEND_SECONDS);
+  const [resending, setResending] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (step !== 'reset') return;
+    setResendIn(RESEND_SECONDS);
+    timerRef.current = setInterval(() => {
+      setResendIn((prev) => {
+        if (prev <= 1) {
+          if (timerRef.current) clearInterval(timerRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [step]);
+
+  const validateEmail = (value: string): string => {
+    const trimmed = value.trim();
+    if (!trimmed) return 'Введите email';
+    if (!EMAIL_REGEX.test(trimmed)) return 'Введите корректный email';
+    return '';
+  };
+
+  const handleSendCode = async () => {
+    setEmailError('');
+    const err = validateEmail(email);
+    if (err) {
+      setEmailError(err);
+      return;
+    }
+    setSendingCode(true);
+    try {
+      await forgotPassword(email.trim());
+      setStep('reset');
+    } catch (e) {
+      setEmailError(getApiError(e, 'Не удалось отправить код'));
+    } finally {
+      setSendingCode(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    if (resendIn > 0 || resending) return;
+    setEmailError('');
+    setResending(true);
+    try {
+      await forgotPassword(email.trim());
+      setResendIn(RESEND_SECONDS);
+      timerRef.current = setInterval(() => {
+        setResendIn((prev) => {
+          if (prev <= 1) {
+            if (timerRef.current) clearInterval(timerRef.current);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } catch (e) {
+      Alert.alert('Ошибка', getApiError(e, 'Не удалось отправить код повторно'));
+    } finally {
+      setResending(false);
+    }
+  };
+
+  const isResetValid =
+    /^\d{6}$/.test(code.trim()) && newPassword.length >= 8;
+
+  const handleResetPassword = async () => {
+    setCodeError('');
+    setPasswordError('');
+
+    if (!/^\d{6}$/.test(code.trim())) {
+      setCodeError('Введите 6-значный код из письма');
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPasswordError('Пароль должен быть не короче 8 символов');
+      return;
+    }
+
+    setResetting(true);
+    try {
+      await resetPassword(email.trim(), code.trim(), newPassword);
+      Alert.alert('Пароль изменён', 'Теперь вы можете войти с новым паролем.', [
+        { text: 'ОК', onPress: () => router.replace('/(auth)/login') },
+      ]);
+    } catch (e) {
+      const status = (e as { response?: { status?: number } })?.response?.status;
+      const message = getApiError(e, 'Не удалось сбросить пароль');
+      if (status === 400) {
+        setCodeError(message);
+      } else if (status === 422) {
+        setPasswordError(message);
+      } else {
+        Alert.alert('Ошибка', message);
+      }
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const canResend = resendIn === 0 && !resending;
+
+  // Stepwise back navigation: from step 'reset' (screen 3) return to step 'email' (screen 2).
+  // This keeps the flow strictly stepwise — the user must go through the email step
+  // before reaching the login screen, never skipping a step.
+  const goBackToEmail = useCallback(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    setStep('email');
+    setCode('');
+    setNewPassword('');
+    setCodeError('');
+    setPasswordError('');
+    setResendIn(RESEND_SECONDS);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return {
+    step,
+    email,
+    setEmail,
+    code,
+    setCode,
+    newPassword,
+    setNewPassword,
+    showPassword,
+    setShowPassword,
+    emailError,
+    setEmailError,
+    sendingCode,
+    codeError,
+    setCodeError,
+    passwordError,
+    setPasswordError,
+    resetting,
+    resendIn,
+    resending,
+    isResetValid,
+    canResend,
+    sendCode: handleSendCode,
+    resendCode: handleResendCode,
+    resetPassword: handleResetPassword,
+    goBackToEmail,
+  };
+}
+</file>
+
+<file path="hooks/useStudyTimer.ts">
 import { useEffect } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 
@@ -3537,10 +5677,9 @@ export function useStudyTimer(enabled: boolean) {
     };
   }, [enabled]);
 }
-````
+</file>
 
-## File: lib/api/auth.ts
-````typescript
+<file path="lib/api/auth.ts">
 import { apiClient } from '@/lib/api/client';
 
 export type User = {
@@ -3554,10 +5693,21 @@ export type TokenResponse = {
   token_type: string;
 };
 
-export async function sendEmailCode(email: string, purpose: 'register' | 'login') {
+export async function sendEmailCode(
+  email: string,
+  purpose: 'register' | 'login' | 'reset',
+) {
   const { data } = await apiClient.post<{ message: string }>(
     '/auth/email/send-code',
     { email, purpose },
+  );
+  return data;
+}
+
+export async function verifyRegistrationCode(email: string, code: string) {
+  const { data } = await apiClient.post<{ status: 'success' }>(
+    '/api/verify-code',
+    { email, code },
   );
   return data;
 }
@@ -3593,14 +5743,40 @@ export async function loginWithPassword(email: string, password: string) {
   return data;
 }
 
+export async function loginWithGoogle(idToken: string) {
+  const { data } = await apiClient.post<TokenResponse>('/auth/google', {
+    id_token: idToken,
+  });
+  return data;
+}
+
+export async function forgotPassword(email: string) {
+  const { data } = await apiClient.post<{ message: string }>(
+    '/auth/forgot-password',
+    { email },
+  );
+  return data;
+}
+
+export async function resetPassword(
+  email: string,
+  code: string,
+  newPassword: string,
+) {
+  const { data } = await apiClient.post<{ message: string }>(
+    '/auth/reset-password',
+    { email, code, new_password: newPassword },
+  );
+  return data;
+}
+
 export async function fetchMe() {
   const { data } = await apiClient.get<User>('/auth/me');
   return data;
 }
-````
+</file>
 
-## File: lib/api/client.ts
-````typescript
+<file path="lib/api/client.ts">
 import axios from 'axios';
 
 import { API_BASE_URL } from '@/constants/api';
@@ -3618,10 +5794,9 @@ export function setAuthToken(token: string | null) {
     delete apiClient.defaults.headers.common.Authorization;
   }
 }
-````
+</file>
 
-## File: lib/api/leaderboard.ts
-````typescript
+<file path="lib/api/leaderboard.ts">
 import { apiClient } from '@/lib/api/client';
 
 export type LeaderboardEntry = {
@@ -3656,10 +5831,9 @@ export async function reportStudyTime(seconds: number) {
   );
   return data;
 }
-````
+</file>
 
-## File: lib/api/phrases.ts
-````typescript
+<file path="lib/api/phrases.ts">
 import { apiClient } from '@/lib/api/client';
 
 export type Phrase = {
@@ -3698,10 +5872,9 @@ export async function fetchLevels() {
   const { data } = await apiClient.get<{ levels: string[] }>('/phrases/levels');
   return data.levels;
 }
-````
+</file>
 
-## File: lib/api/quiz.ts
-````typescript
+<file path="lib/api/quiz.ts">
 import { apiClient } from '@/lib/api/client';
 
 export type QuizQuestion = {
@@ -3723,10 +5896,9 @@ export async function fetchQuiz(level?: string, count = 10) {
   });
   return data;
 }
-````
+</file>
 
-## File: lib/api/srs.ts
-````typescript
+<file path="lib/api/srs.ts">
 import { apiClient } from '@/lib/api/client';
 
 export type SRSCardItem = {
@@ -3779,10 +5951,9 @@ export async function fetchSRSStats() {
   const { data } = await apiClient.get<SRSStats>('/srs/stats');
   return data;
 }
-````
+</file>
 
-## File: lib/api/stats.ts
-````typescript
+<file path="lib/api/stats.ts">
 import { apiClient } from '@/lib/api/client';
 
 export type UserStats = {
@@ -3805,10 +5976,9 @@ export async function fetchMyStats() {
 export async function markPhraseLearned(phraseId: number) {
   await apiClient.post('/progress/learned', { phrase_id: phraseId });
 }
-````
+</file>
 
-## File: lib/storage/token.ts
-````typescript
+<file path="lib/storage/token.ts">
 import * as SecureStore from 'expo-secure-store';
 
 const TOKEN_KEY = 'english_app_token';
@@ -3824,37 +5994,57 @@ export async function loadToken(): Promise<string | null> {
 export async function clearToken() {
   await SecureStore.deleteItemAsync(TOKEN_KEY);
 }
-````
+</file>
 
-## File: lib/errors.ts
-````typescript
+<file path="lib/errors.ts">
 import axios from 'axios';
 
 export function getApiError(err: unknown, fallback: string): string {
   if (axios.isAxiosError(err)) {
     if (!err.response) {
+      // Запрос не дошёл до сервера или не дождался ответа за таймаут
       if (err.code === 'ECONNABORTED') {
-        return 'Сервер не отвечает. Проверьте, что backend запущен.';
+        return __DEV__
+          ? 'Сервер не отвечает (таймаут 15 с). Проверьте, что backend запущен.'
+          : 'Сервер не отвечает. Проверьте подключение к интернету и попробуйте ещё раз.';
       }
-      return 'Нет связи с сервером. Запустите backend и проверьте Wi‑Fi.';
+      return __DEV__
+        ? `Нет связи с сервером (${err.message}). Проверьте, что backend запущен и Wi-Fi включён.`
+        : 'Нет подключения к интернету. Проверьте сеть и попробуйте ещё раз.';
     }
     const detail = err.response.data?.detail;
     if (typeof detail === 'string') return detail;
     if (Array.isArray(detail) && detail[0]?.msg) return detail[0].msg;
     if (err.response.status === 429) return 'Слишком много запросов. Подождите минуту.';
+    if (__DEV__) return `${fallback} (HTTP ${err.response.status})`;
   }
   return fallback;
 }
-````
+</file>
 
-## File: scripts/.env.example
-````
+<file path="plugins/withSingleTaskLaunchMode.js">
+const { withAndroidManifest } = require('@expo/config-plugins');
+function withSingleTaskLaunchMode(config) {
+return withAndroidManifest(config, (config) => {
+const mainApplication = config.modResults.manifest.application[0];
+const mainActivity = mainApplication.activity.find(
+(activity) => activity.$['android:name'] === '.MainActivity'
+);
+if (mainActivity) {
+mainActivity.$['android:launchMode'] = 'singleTask';
+}
+return config;
+});
+}
+module.exports = withSingleTaskLaunchMode;
+</file>
+
+<file path="scripts/.env.example">
 # IP компьютера с запущенным FastAPI (порт 8000)
 EXPO_PUBLIC_API_URL=http://192.168.0.23:8000
-````
+</file>
 
-## File: scripts/reset-project.js
-````javascript
+<file path="scripts/reset-project.js">
 #!/usr/bin/env node
 
 /**
@@ -3967,16 +6157,146 @@ rl.question(
     }
   }
 );
-````
+</file>
 
-## File: .env.example
-````
+<file path="scripts/start-dev.js">
+/**
+ * Единый скрипт запуска разработки: бэкенд (FastAPI) + фронтенд (Expo).
+ *
+ * Почему не concurrently: он перехватывает вывод дочерних процессов, и Expo
+ * считает терминал неинтерактивным — тогда не рисуется QR-код и не работают
+ * горячие клавиши. Здесь Expo запускается в foreground с наследованием TTY,
+ * а вывод бэкенда помечается префиксом [backend].
+ *
+ * Заодно фиксируется LAN-адрес: если на ПК есть виртуальные адаптеры
+ * (Wi-Fi Direct и т.п. с адресами 169.254.x.x), Expo может выбрать не тот
+ * интерфейс, и телефон не сможет подключиться. Реальный IP передаётся через
+ * REACT_NATIVE_PACKAGER_HOSTNAME.
+ */
+const { spawn, execSync } = require('child_process');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
+const FRONTEND_ROOT = path.join(__dirname, '..');
+const EXPO_CLI = path.join(
+  FRONTEND_ROOT,
+  'node_modules',
+  'expo',
+  'node_modules',
+  '@expo',
+  'cli',
+  'build',
+  'bin',
+  'cli'
+);
+const isWin = process.platform === 'win32';
+
+function getLanIp() {
+  const candidates = [];
+  for (const addresses of Object.values(os.networkInterfaces())) {
+    for (const addr of addresses || []) {
+      if (addr.family !== 'IPv4' || addr.internal) continue;
+      if (addr.address.startsWith('169.254.')) continue; // link-local — не подходит
+      candidates.push(addr.address);
+    }
+  }
+  // Предпочитаем 192.168.x.x — типичный диапазон домашних роутеров
+  return candidates.find((ip) => ip.startsWith('192.168.')) || candidates[0] || null;
+}
+
+const env = { ...process.env };
+const lanIp = getLanIp();
+if (lanIp) {
+  env.REACT_NATIVE_PACKAGER_HOSTNAME = lanIp;
+  console.log(`[dev] LAN: exp://${lanIp}:8081 | backend: http://${lanIp}:8000\n`);
+} else {
+  console.warn('[dev] LAN IP не найден — Expo запустится в обычном режиме.\n');
+}
+
+/** Убивает процесс вместе со всеми дочерними (важно для uvicorn --reload на Windows). */
+function killTree(child) {
+  if (!child || child.pid == null || child.exitCode !== null) return;
+  if (isWin) {
+    try {
+      execSync(`taskkill /PID ${child.pid} /T /F`, { stdio: 'ignore' });
+    } catch {
+      /* процесс уже завершился */
+    }
+  } else {
+    child.kill('SIGTERM');
+  }
+}
+
+/** Помечает строки из потока префиксом вида [backend]. */
+function prefixStream(stream, tag) {
+  let buffer = '';
+  stream.on('data', (chunk) => {
+    buffer += chunk.toString();
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop(); // незавершённая строка ждёт продолжения
+    for (const line of lines) {
+      if (line.trim()) process.stdout.write(`[${tag}] ${line}\n`);
+    }
+  });
+}
+
+// --- Бэкенд: uvicorn из папки ../backend ---
+const backend = spawn('npm run backend', {
+  cwd: FRONTEND_ROOT,
+  env,
+  shell: isWin,
+});
+prefixStream(backend.stdout, 'backend');
+prefixStream(backend.stderr, 'backend');
+backend.on('exit', (code) => {
+  if (code !== 0 && code !== null) {
+    console.error(`[dev] Бэкенд завершился с кодом ${code} (порт 8000 занят?)`);
+  }
+});
+
+// Дополнительные аргументы прокидываются в Expo:
+// node scripts/start-dev.js --port 8082
+const extraArgs = process.argv.slice(2);
+
+// --- Фронтенд: Expo в foreground с наследованием терминала (TTY) ---
+const expo = fs.existsSync(EXPO_CLI)
+  ? spawn(process.execPath, [EXPO_CLI, 'start', '-c', '--lan', ...extraArgs], {
+      cwd: FRONTEND_ROOT,
+      env,
+      stdio: 'inherit', // ВАЖНО: без этого Expo не покажет QR-код
+    })
+  : spawn(`npx expo start -c --lan ${extraArgs.join(' ')}`, {
+      cwd: FRONTEND_ROOT,
+      env,
+      stdio: 'inherit',
+      shell: isWin,
+    });
+
+expo.on('exit', (code) => {
+  killTree(backend);
+  process.exit(code ?? 0);
+});
+
+process.on('SIGINT', () => {
+  killTree(backend);
+  killTree(expo);
+  process.exit(0);
+});
+process.on('exit', () => killTree(backend));
+</file>
+
+<file path=".env.example">
 # IP компьютера с запущенным FastAPI (порт 8000)
 EXPO_PUBLIC_API_URL=http://192.168.0.23:8000
-````
 
-## File: .gitignore
-````
+# Google OAuth Client ID (Google Cloud Console → Credentials)
+EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=
+EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=
+EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=
+</file>
+
+<file path=".gitignore">
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
 # dependencies
@@ -4020,10 +6340,9 @@ app-example
 # generated native folders
 /ios
 /android
-````
+</file>
 
-## File: app.json
-````json
+<file path="app.json">
 {
   "expo": {
     "name": "ingich",
@@ -4032,12 +6351,14 @@ app-example
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "ingich",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.samir.ingich"
     },
     "android": {
+      "package": "com.samir.ingich",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -4053,6 +6374,7 @@ app-example
     },
     "plugins": [
       "expo-router",
+      "expo-dev-client",
       [
         "expo-splash-screen",
         {
@@ -4065,18 +6387,25 @@ app-example
           }
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "./plugins/withSingleTaskLaunchMode"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "466ae202-4ccc-43e7-b638-2f1ff51b28d1"
+      }
+    },
+    "owner": "samir222"
   }
 }
-````
+</file>
 
-## File: BEFORE_AFTER_COMPARISON.md
-````markdown
+<file path="BEFORE_AFTER_COMPARISON.md">
 # 📊 СРАВНЕНИЕ "ДО И ПОСЛЕ"
 
 ## 🔴 ДО (БЫЛО ПРОБЛЕМЫ):
@@ -4327,10 +6656,9 @@ npm start
 ```
 
 **Всё работает идеально!** ✨
-````
+</file>
 
-## File: COMPLETE_CODE.md
-````markdown
+<file path="COMPLETE_CODE.md">
 // ========================================
 // ЭКРАН ВХОДА - frontend/app/(auth)/login.tsx
 // ========================================
@@ -5057,10 +7385,9 @@ const styles = StyleSheet.create({
 // ========================================
 
 EXPO_PUBLIC_API_URL=http://192.168.0.23:8000
-````
+</file>
 
-## File: COMPLETION_CHECKLIST.md
-````markdown
+<file path="COMPLETION_CHECKLIST.md">
 # ✅ ФИНАЛЬНЫЙ ЧЕК-ЛИСТ
 
 ## 🎯 ТРЕБОВАНИЕ 1: ИСПРАВЛЕНИЕ СВЯЗИ И АВТОРИЗАЦИИ
@@ -5246,10 +7573,33 @@ npm start
 ```
 
 **Статус:** 🟢 ГОТОВО К ПРОИЗВОДСТВУ
-````
+</file>
 
-## File: eslint.config.js
-````javascript
+<file path="eas.json">
+{
+  "cli": {
+    "version": ">= 22.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal"
+    },
+    "production": {
+      "autoIncrement": true
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
+</file>
+
+<file path="eslint.config.js">
 // https://docs.expo.dev/guides/using-eslint/
 const { defineConfig } = require('eslint/config');
 const expoConfig = require('eslint-config-expo/flat');
@@ -5260,10 +7610,9 @@ module.exports = defineConfig([
     ignores: ['dist/*'],
   },
 ]);
-````
+</file>
 
-## File: FINAL_REPORT.md
-````markdown
+<file path="FINAL_REPORT.md">
 # 🎯 ФИНАЛЬНЫЙ ОТЧЁТ: ВСЕ ИСПРАВЛЕНИЯ ВЫПОЛНЕНЫ
 
 ## ✅ 1. ИСПРАВЛЕНИЕ СВЯЗИ И АВТОРИЗАЦИИ
@@ -5457,10 +7806,9 @@ npm start
 ✅ **4. ЕДИНЫЙ СТИЛЬ** - Идентичные кнопки, цвета, размеры  
 
 **Проект полностью готов к использованию!** 🚀
-````
+</file>
 
-## File: FRONTEND_UPDATES.md
-````markdown
+<file path="FRONTEND_UPDATES.md">
 # ✅ ПОЛНОЕ ИСПРАВЛЕНИЕ ФРОНТЕНДА
 
 ## 🔧 Выполненные изменения:
@@ -5555,10 +7903,9 @@ npm start
 ```
 
 ✨ **Оба экрана теперь имеют идеальный дизайн, русский язык и работают с бэкендом!**
-````
+</file>
 
-## File: package.json
-````json
+<file path="package.json">
 {
   "name": "ingich",
   "main": "expo-router/entry",
@@ -5566,12 +7913,13 @@ npm start
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
+    "start:dev-client": "expo start --dev-client",
     "lint": "expo lint",
     "backend": "cd ../backend && uvicorn main:app --reload --host 0.0.0.0",
-    "dev": "concurrently \"npm run backend\" \"npx expo start -c\""
+    "dev": "node ./scripts/start-dev.js"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -5580,7 +7928,9 @@ npm start
     "@react-navigation/native": "^7.1.8",
     "axios": "^1.16.0",
     "expo": "~54.0.33",
+    "expo-auth-session": "~7.0.11",
     "expo-constants": "~18.0.13",
+    "expo-dev-client": "~6.0.21",
     "expo-font": "~14.0.11",
     "expo-haptics": "~15.0.8",
     "expo-image": "~3.0.11",
@@ -5602,10 +7952,12 @@ npm start
     "react-native-reanimated": "~4.1.1",
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",
+    "react-native-svg": "15.12.1",
     "react-native-web": "~0.21.0",
     "react-native-worklets": "0.5.1"
   },
   "devDependencies": {
+    "@react-native-community/cli": "^20.2.0",
     "@types/react": "~19.1.0",
     "concurrently": "^10.0.3",
     "eslint": "^9.25.0",
@@ -5614,10 +7966,9 @@ npm start
   },
   "private": true
 }
-````
+</file>
 
-## File: QUICK_REFERENCE.md
-````markdown
+<file path="QUICK_REFERENCE.md">
 # 🔧 БЫСТРЫЙ СПРАВОЧНИК ДЛЯ РАЗРАБОТЧИКА
 
 ## Файлы которые были изменены:
@@ -5823,10 +8174,9 @@ EXPO_PUBLIC_API_URL=http://ваш-ip:8000
 ---
 
 ✨ **Всё готово! Проект работает как часы.** ⏰
-````
+</file>
 
-## File: README.md
-````markdown
+<file path="README.md">
 # Welcome to your Expo app 👋
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
@@ -5877,10 +8227,9 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
-````
+</file>
 
-## File: tsconfig.json
-````json
+<file path="tsconfig.json">
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
@@ -5898,4 +8247,6 @@ Join our community of developers creating universal apps.
     "expo-env.d.ts"
   ]
 }
-````
+</file>
+
+</files>

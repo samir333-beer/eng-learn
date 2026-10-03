@@ -1,13 +1,17 @@
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Alert } from 'react-native';
 
 import { forgotPassword, resetPassword } from '@/lib/api/auth';
 import { getApiError } from '@/lib/errors';
+import { useCodeVerification } from '@/hooks/useCodeVerification';
+import { useFormValidation, validators } from '@/hooks/useFormValidation';
+import { useResendTimer } from '@/hooks/useResendTimer';
 
 const RESEND_SECONDS = 60;
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** Минимальная длина нового пароля при сбросе (как на бэкенде). */
+const NEW_PASSWORD_MIN_LENGTH = 8;
 
 export type ResetPasswordStep = 'email' | 'reset';
 
@@ -16,61 +20,56 @@ export function useResetPassword() {
 
   const [step, setStep] = useState<ResetPasswordStep>('email');
   const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   // Step 1 state
-  const [emailError, setEmailError] = useState('');
   const [sendingCode, setSendingCode] = useState(false);
 
   // Step 2 state
-  const [codeError, setCodeError] = useState('');
-  const [passwordError, setPasswordError] = useState('');
   const [resetting, setResetting] = useState(false);
 
-  // Resend timer
-  const [resendIn, setResendIn] = useState(RESEND_SECONDS);
-  const [resending, setResending] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Общий хук валидации — та же логика ошибок, что и на остальных
+  // экранах авторизации: ошибки под полями, проверка по нажатию кнопки.
+  const {
+    errors,
+    validate,
+    clearError,
+    setError: setFieldError,
+  } = useFormValidation({
+    email: validators.email,
+    code: validators.code,
+    newPassword: validators.password(NEW_PASSWORD_MIN_LENGTH),
+  });
 
-  useEffect(() => {
-    if (step !== 'reset') return;
-    setResendIn(RESEND_SECONDS);
-    timerRef.current = setInterval(() => {
-      setResendIn((prev) => {
-        if (prev <= 1) {
-          if (timerRef.current) clearInterval(timerRef.current);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [step]);
+  // Живая проверка кода сброса — тот же хук, что и в регистрации
+  // (purpose='reset'): ячейки краснеют/зеленеют сразу после 6-й цифры.
+  const {
+    code,
+    status: codeStatus,
+    verified: codeVerified,
+    error: verifyError,
+    handleChange: handleCodeChange,
+    reset: resetCodeVerification,
+  } = useCodeVerification(email, 'reset');
 
-  const validateEmail = (value: string): string => {
-    const trimmed = value.trim();
-    if (!trimmed) return 'Введите email';
-    if (!EMAIL_REGEX.test(trimmed)) return 'Введите корректный email';
-    return '';
-  };
+  // Локальная ошибка кода — только от финального запроса reset-password
+  // (живая проверка уже закрыла случай неверного кода до нажатия кнопки).
+  const [codeError, setCodeError] = useState('');
+
+  // Таймер повторной отправки кода.
+  const { resendIn, resending, run: runResend } = useResendTimer(RESEND_SECONDS);
 
   const handleSendCode = async () => {
-    setEmailError('');
-    const err = validateEmail(email);
-    if (err) {
-      setEmailError(err);
-      return;
-    }
+    clearError('email');
+    // Шаг 1 — проверяем только email, поля шага 2 не трогаем.
+    if (!validate({ email, code, newPassword }, ['email'])) return;
     setSendingCode(true);
     try {
       await forgotPassword(email.trim());
       setStep('reset');
     } catch (e) {
-      setEmailError(getApiError(e, 'Не удалось отправить код'));
+      setFieldError('email', getApiError(e, 'Не удалось отправить код'));
     } finally {
       setSendingCode(false);
     }
@@ -78,42 +77,30 @@ export function useResetPassword() {
 
   const handleResendCode = async () => {
     if (resendIn > 0 || resending) return;
-    setEmailError('');
-    setResending(true);
+    setCodeError('');
+    // Новый код сделает старый недействительным — очищаем ввод, как в регистрации.
+    handleCodeChange('');
+    resetCodeVerification();
     try {
-      await forgotPassword(email.trim());
-      setResendIn(RESEND_SECONDS);
-      timerRef.current = setInterval(() => {
-        setResendIn((prev) => {
-          if (prev <= 1) {
-            if (timerRef.current) clearInterval(timerRef.current);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+      await runResend(() => forgotPassword(email.trim()));
     } catch (e) {
       Alert.alert('Ошибка', getApiError(e, 'Не удалось отправить код повторно'));
-    } finally {
-      setResending(false);
     }
   };
 
-  const isResetValid =
-    /^\d{6}$/.test(code.trim()) && newPassword.length >= 8;
+  // Печать цифр идёт через живую проверку; заодно чистим ошибку прошлой попытки.
+  const setCode = useCallback(
+    (raw: string) => {
+      setCodeError('');
+      handleCodeChange(raw);
+    },
+    [handleCodeChange],
+  );
 
   const handleResetPassword = async () => {
     setCodeError('');
-    setPasswordError('');
-
-    if (!/^\d{6}$/.test(code.trim())) {
-      setCodeError('Введите 6-значный код из письма');
-      return;
-    }
-    if (newPassword.length < 8) {
-      setPasswordError('Пароль должен быть не короче 8 символов');
-      return;
-    }
+    // Шаг 2 — проверяем код и новый пароль по нажатию кнопки.
+    if (!validate({ email, code, newPassword }, ['code', 'newPassword'])) return;
 
     setResetting(true);
     try {
@@ -127,7 +114,7 @@ export function useResetPassword() {
       if (status === 400) {
         setCodeError(message);
       } else if (status === 422) {
-        setPasswordError(message);
+        setFieldError('newPassword', message);
       } else {
         Alert.alert('Ошибка', message);
       }
@@ -142,13 +129,13 @@ export function useResetPassword() {
   // This keeps the flow strictly stepwise — the user must go through the email step
   // before reaching the login screen, never skipping a step.
   const goBackToEmail = useCallback(() => {
-    if (timerRef.current) clearInterval(timerRef.current);
     setStep('email');
-    setCode('');
+    handleCodeChange('');
+    resetCodeVerification();
     setNewPassword('');
     setCodeError('');
-    setPasswordError('');
-    setResendIn(RESEND_SECONDS);
+    setFieldError('code', '');
+    setFieldError('newPassword', '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -158,25 +145,26 @@ export function useResetPassword() {
     setEmail,
     code,
     setCode,
+    codeStatus,
+    codeVerified,
     newPassword,
     setNewPassword,
     showPassword,
     setShowPassword,
-    emailError,
-    setEmailError,
+    emailError: errors.email ?? '',
     sendingCode,
-    codeError,
-    setCodeError,
-    passwordError,
-    setPasswordError,
+    // Живая ошибка (неверный код) + ошибка от финального запроса.
+    codeError: codeError || verifyError,
+    passwordError: errors.newPassword ?? '',
     resetting,
     resendIn,
     resending,
-    isResetValid,
     canResend,
     sendCode: handleSendCode,
     resendCode: handleResendCode,
     resetPassword: handleResetPassword,
     goBackToEmail,
+    // Очистка ошибки поля при вводе (для onChangeText на экране).
+    clearFieldError: clearError,
   };
 }

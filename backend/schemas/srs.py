@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel
 
 
@@ -19,7 +21,7 @@ class SRSReviewResponse(BaseModel):
 
 class SRSReviewRequest(BaseModel):
     card_id: int
-    quality: int  # 0 = не знаю, 1 = знаю
+    quality: Literal[0, 1]  # 0 = не знаю, 1 = знаю
 
 
 class SRSReviewResult(BaseModel):

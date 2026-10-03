@@ -1,29 +1,18 @@
-import { LinearGradient } from 'expo-linear-gradient';
-import { Link, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
-import {
-  ActivityIndicator,
-  BackHandler,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BackHandler, StyleSheet, View } from 'react-native';
 
-import { useThemePalette } from '@/hooks/use-theme-palette';
+import { AuthBackdrop } from '@/components/auth/AuthBackdrop';
+import { AuthField } from '@/components/auth/AuthField';
+import { AuthFooterLink } from '@/components/auth/AuthFooterLink';
+import { AuthHeader } from '@/components/auth/AuthHeader';
+import { AuthScreen } from '@/components/auth/AuthScreen';
+import { ResetCodeFields } from '@/components/auth/ResetCodeFields';
+import { FadeIn } from '@/components/ui/FadeIn';
+import { AppButton } from '@/components/ui/AppButton';
 import { useResetPassword } from '@/hooks/useResetPassword';
-import { SocialIcon } from '@/components/ui/SocialIcon';
-
-import { styles } from '../../styles/reset-password.styles';
 
 export default function ResetPasswordScreen() {
-  const p = useThemePalette();
-  const insets = useSafeAreaInsets();
   const router = useRouter();
 
   const {
@@ -32,33 +21,28 @@ export default function ResetPasswordScreen() {
     setEmail,
     code,
     setCode,
+    codeStatus,
     newPassword,
     setNewPassword,
-    showPassword,
-    setShowPassword,
     emailError,
-    setEmailError,
     sendingCode,
     codeError,
-    setCodeError,
     passwordError,
-    setPasswordError,
     resetting,
     resendIn,
     resending,
-    isResetValid,
     canResend,
     sendCode,
     resendCode,
     resetPassword,
     goBackToEmail,
+    clearFieldError,
   } = useResetPassword();
 
-  // Stepwise back navigation:
-  // - On step 'email' (screen 2): router.back() returns to login (screen 1).
-  // - On step 'reset' (screen 3): goBackToEmail() returns to step 'email' (screen 2),
-  //   never skipping a step. The system back gesture/button on Android is handled
-  //   by the same logic via the onPress handler below.
+  // Пошаговая навигация «назад»:
+  // шаг 'email' (экран 2) → router.back() вернёт на вход (экран 1);
+  // шаг 'reset' (экран 3) → goBackToEmail() вернёт на шаг 'email',
+  // перескок через шаг невозможен.
   const handleBack = () => {
     if (step === 'reset') {
       goBackToEmail();
@@ -67,303 +51,110 @@ export default function ResetPasswordScreen() {
     }
   };
 
-  // Intercept the Android system back button/gesture so that from step 'reset'
-  // (screen 3) it returns to step 'email' (screen 2) instead of skipping
-  // straight to login (screen 1). The flow stays strictly stepwise.
+  // Перехват системной кнопки «назад» на Android: с шага 'reset' возвращаемся
+  // на шаг 'email', а не сразу на вход.
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       if (step === 'reset') {
         goBackToEmail();
-        return true; // prevent default back navigation (would skip to login)
+        return true; // отменяем стандартную навигацию (ушла бы на вход)
       }
-      return false; // allow default back navigation (screen 2 → login)
+      return false; // стандартная навигация: экран 2 → вход
     });
     return () => subscription.remove();
   }, [step, goBackToEmail]);
 
   return (
-    <View style={[styles.root, { backgroundColor: p.bg }]}>
-      <LinearGradient
-        colors={[`${p.primary}18`, 'transparent']}
-        style={styles.glow}
-      />
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled">
-          <View style={[styles.content, { paddingTop: insets.top + 24 }]}>
-            {/* Back button — visually identical to the one on the register screen */}
-            <Pressable
-              onPress={handleBack}
-              style={styles.backButton}
-              hitSlop={12}>
-              <Ionicons name="chevron-back" size={28} color={p.text} />
-            </Pressable>
+    <AuthScreen backdrop={<AuthBackdrop />}>
+      <FadeIn>
+        <AuthHeader
+          icon="key-outline"
+          title="Сброс пароля"
+          subtitle={
+            step === 'email'
+              ? 'Введите email — отправим код восстановления'
+              : 'Введите код из письма и новый пароль'
+          }
+          onBack={handleBack}
+        />
+      </FadeIn>
 
-            {/* Header */}
-            <View style={styles.header}>
-              <View style={styles.iconBadge}>
-                <Ionicons name="key-outline" size={28} color={p.primary} />
-              </View>
-              <Text style={[styles.title, { color: p.text }]}>Сброс пароля</Text>
-              <Text style={[styles.subtitle, { color: p.textMuted }]}>
-                {step === 'email'
-                  ? 'Введите email для восстановления'
-                  : 'Введите код из письма и новый пароль'}
-              </Text>
-            </View>
+      <FadeIn delay={100}>
+        <View style={styles.form}>
+          {step === 'email' ? (
+            <AuthField
+              label="Email"
+              icon="mail-outline"
+              placeholder="you@example.com"
+              value={email}
+              onChangeText={(v) => {
+                setEmail(v);
+                clearFieldError('email');
+              }}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="email"
+              textContentType="emailAddress"
+              editable={!sendingCode}
+              error={emailError || undefined}
+            />
+          ) : (
+            <ResetCodeFields
+              code={code}
+              // setCode из хука чистит цифры и прошлую ошибку сам.
+              onChangeCode={(v) => setCode(v.replace(/[^0-9]/g, ''))}
+              codeStatus={codeStatus}
+              codeError={codeError}
+              newPassword={newPassword}
+              onChangeNewPassword={(v) => {
+                setNewPassword(v);
+                clearFieldError('newPassword');
+              }}
+              passwordError={passwordError}
+              canResend={canResend}
+              resendIn={resendIn}
+              resending={resending}
+              onResend={resendCode}
+              resetting={resetting}
+            />
+          )}
+        </View>
+      </FadeIn>
 
-            {/* Form */}
-            <View style={styles.form}>
-              {/* Step 1: Email */}
-              {step === 'email' ? (
-                <View style={styles.field}>
-                  <Text style={[styles.label, { color: p.textMuted }]}>Email</Text>
-                  <View
-                    style={[
-                      styles.inputWrapper,
-                      { borderColor: emailError ? p.danger : p.border },
-                    ]}>
-                    <Ionicons
-                      name="mail-outline"
-                      size={20}
-                      color={p.textMuted}
-                      style={styles.inputIcon}
-                    />
-                    <TextInput
-                      placeholder="you@example.com"
-                      placeholderTextColor="#9AA4B8"
-                      value={email}
-                      onChangeText={(v) => {
-                        setEmail(v);
-                        if (emailError) setEmailError('');
-                      }}
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                      autoComplete="email"
-                      editable={!sendingCode}
-                      style={[styles.input, { color: p.text }]}
-                    />
-                  </View>
-                  {emailError ? (
-                    <Text style={[styles.fieldError, { color: p.danger }]}>
-                      {emailError}
-                    </Text>
-                  ) : null}
-                </View>
-              ) : null}
+      <FadeIn delay={200}>
+        {step === 'email' ? (
+          <AppButton
+            title={sendingCode ? 'Отправка…' : 'Отправить код'}
+            onPress={sendCode}
+            loading={sendingCode}
+            style={styles.submit}
+          />
+        ) : (
+          <AppButton
+            title={resetting ? 'Сохранение…' : 'Сбросить пароль'}
+            onPress={resetPassword}
+            loading={resetting}
+            style={styles.submit}
+          />
+        )}
 
-              {/* Step 2: Code + New password */}
-              {step === 'reset' ? (
-                <>
-                  <View style={styles.field}>
-                    <Text style={[styles.label, { color: p.textMuted }]}>
-                      Код подтверждения
-                    </Text>
-                    <View
-                      style={[
-                        styles.inputWrapper,
-                        { borderColor: codeError ? p.danger : p.border },
-                      ]}>
-                      <Ionicons
-                        name="shield-checkmark-outline"
-                        size={20}
-                        color={p.textMuted}
-                        style={styles.inputIcon}
-                      />
-                      <TextInput
-                        placeholder="6-значный код"
-                        placeholderTextColor="#9AA4B8"
-                        value={code}
-                        onChangeText={(v) => {
-                          setCode(v.replace(/[^0-9]/g, ''));
-                          if (codeError) setCodeError('');
-                        }}
-                        keyboardType="number-pad"
-                        maxLength={6}
-                        editable={!resetting}
-                        style={[styles.input, { color: p.text }]}
-                      />
-                    </View>
-                    {codeError ? (
-                      <Text style={[styles.fieldError, { color: p.danger }]}>
-                        {codeError}
-                      </Text>
-                    ) : null}
-                  </View>
-
-                  <View style={styles.field}>
-                    <Text style={[styles.label, { color: p.textMuted }]}>
-                      Новый пароль
-                    </Text>
-                    <View
-                      style={[
-                        styles.inputWrapper,
-                        { borderColor: passwordError ? p.danger : p.border },
-                      ]}>
-                      <Ionicons
-                        name="lock-closed-outline"
-                        size={20}
-                        color={p.textMuted}
-                        style={styles.inputIcon}
-                      />
-                      <TextInput
-                        placeholder="Минимум 8 символов"
-                        placeholderTextColor="#9AA4B8"
-                        value={newPassword}
-                        onChangeText={(v) => {
-                          setNewPassword(v);
-                          if (passwordError) setPasswordError('');
-                        }}
-                        secureTextEntry={!showPassword}
-                        autoCapitalize="none"
-                        editable={!resetting}
-                        style={[styles.input, { color: p.text }]}
-                      />
-                      <Pressable
-                        onPress={() => setShowPassword(!showPassword)}
-                        style={styles.eyeButton}
-                        hitSlop={8}>
-                        <Ionicons
-                          name={showPassword ? 'eye-outline' : 'eye-off-outline'}
-                          size={20}
-                          color={p.textMuted}
-                        />
-                      </Pressable>
-                    </View>
-                    {passwordError ? (
-                      <Text style={[styles.fieldError, { color: p.danger }]}>
-                        {passwordError}
-                      </Text>
-                    ) : null}
-                  </View>
-
-                  {/* Resend code */}
-                  <View style={styles.resendRow}>
-                    <Text style={[styles.resendText, { color: p.textMuted }]}>
-                      Не пришёл код?{' '}
-                    </Text>
-                    {canResend ? (
-                      <Pressable
-                        onPress={resendCode}
-                        disabled={resending}
-                        hitSlop={8}>
-                        {resending ? (
-                          <ActivityIndicator size="small" color={p.primary} />
-                        ) : (
-                          <Text style={[styles.resendLink, { color: p.primary }]}>
-                            Отправить повторно
-                          </Text>
-                        )}
-                      </Pressable>
-                    ) : (
-                      <Text style={[styles.resendTimer, { color: p.textMuted }]}>
-                        Отправить повторно через {resendIn} сек
-                      </Text>
-                    )}
-                  </View>
-                </>
-              ) : null}
-            </View>
-
-            {/* Submit button */}
-            {step === 'email' ? (
-              <Pressable
-                onPress={sendCode}
-                disabled={sendingCode}
-                style={({ pressed }) => [
-                  styles.submitWrap,
-                  (pressed || sendingCode) && { opacity: 0.85 },
-                ]}>
-                <LinearGradient
-                  colors={[...p.gradient]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.submitGradient}>
-                  {sendingCode ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.submitText}>Отправить код</Text>
-                  )}
-                </LinearGradient>
-              </Pressable>
-            ) : (
-              <Pressable
-                onPress={resetPassword}
-                disabled={!isResetValid || resetting}
-                style={({ pressed }) => [
-                  styles.submitWrap,
-                  (!isResetValid || resetting) && styles.submitDisabled,
-                  pressed && !resetting && isResetValid && { opacity: 0.85 },
-                ]}>
-                <LinearGradient
-                  colors={[...p.gradient]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.submitGradient}>
-                  {resetting ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.submitText}>Сбросить пароль</Text>
-                  )}
-                </LinearGradient>
-              </Pressable>
-            )}
-
-            {/* Divider */}
-            <View style={styles.dividerContainer}>
-              <View style={[styles.dividerLine, { backgroundColor: p.border }]} />
-              <Text style={[styles.dividerText, { color: p.textMuted }]}>
-                или войти через
-              </Text>
-              <View style={[styles.dividerLine, { backgroundColor: p.border }]} />
-            </View>
-
-            {/* Social buttons */}
-            <View style={styles.socialRow}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.socialButton,
-                  {
-                    backgroundColor: '#FFFFFF',
-                    borderColor: '#E5E7EB',
-                    borderWidth: 1.5,
-                  },
-                  pressed && { opacity: 0.8 },
-                ]}
-                onPress={() => {}}>
-                <SocialIcon provider="google" size={24} />
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.socialButton,
-                  {
-                    backgroundColor: '#FFFFFF',
-                    borderColor: '#E5E7EB',
-                    borderWidth: 1.5,
-                  },
-                  pressed && { opacity: 0.8 },
-                ]}
-                onPress={() => {}}>
-                <SocialIcon provider="apple" size={24} color="#000000" />
-              </Pressable>
-            </View>
-
-            {/* Back to login */}
-            <View style={styles.footer}>
-              <Text style={[styles.footerText, { color: p.textMuted }]}>
-                Вспомнили пароль?{' '}
-              </Text>
-              <Link href="/(auth)/login" style={[styles.loginLink, { color: p.primary }]}>
-                Войти
-              </Link>
-            </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </View>
+        <AuthFooterLink
+          text="Вспомнили пароль?"
+          linkText="Войти"
+          href="/(auth)/login"
+        />
+      </FadeIn>
+    </AuthScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  form: {
+    gap: 20,
+    marginBottom: 28,
+  },
+  submit: {
+    marginBottom: 8,
+  },
+});

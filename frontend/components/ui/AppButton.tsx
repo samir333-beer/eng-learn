@@ -1,4 +1,6 @@
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useCallback } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -6,8 +8,19 @@ import {
   Text,
   type ViewStyle,
 } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
 
 import { useThemePalette } from '@/hooks/use-theme-palette';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+/** Пружинные параметры нажатия: быстрый отклик, мягкое возвращение. */
+const PRESS_SPRING = { damping: 18, stiffness: 320, mass: 0.6 } as const;
+const RELEASE_SPRING = { damping: 16, stiffness: 260, mass: 0.8 } as const;
 
 type Props = {
   title: string;
@@ -32,54 +45,75 @@ export function AppButton({
 }: Props) {
   const p = useThemePalette();
 
+  // Тактильно-визуальный отклик нажатия: scale-пружина + haptics.
+  const scale = useSharedValue(1);
+
+  const onPressIn = useCallback(() => {
+    if (disabled || loading) return;
+    scale.value = withSpring(0.96, PRESS_SPRING);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  }, [disabled, loading, scale]);
+
+  const onPressOut = useCallback(() => {
+    scale.value = withSpring(1, RELEASE_SPRING);
+  }, [scale]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    // Только transform — самый дешёвый способ анимации на любом GPU.
+    transform: [{ scale: scale.value }],
+  }));
+
   if (variant === 'primary') {
-    return (
-      <Pressable
-        onPress={onPress}
-        disabled={disabled || loading}
-        style={({ pressed }) => [
-          styles.wrap,
-          { borderRadius: buttonRadius },
-          style,
-          (pressed || disabled) && { opacity: 0.85 },
-        ]}>
-        <LinearGradient
-          colors={gradientColors ? gradientColors : p.gradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.gradient, { borderRadius: buttonRadius }]}>
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.primaryText}>{title}</Text>
-          )}
-        </LinearGradient>
-      </Pressable>
-    );
-  }
+  return (
+    <AnimatedPressable
+      onPress={onPress}
+      onPressIn={onPressIn}
+      onPressOut={onPressOut}
+      disabled={disabled || loading}
+      style={[
+        styles.wrap,
+        { borderRadius: buttonRadius },
+        disabled && styles.disabled,
+        style,
+        animatedStyle,
+      ]}>
+      <LinearGradient
+        colors={gradientColors ? gradientColors : p.gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.gradient, { borderRadius: buttonRadius }]}>
+        {loading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.primaryText}>{title}</Text>
+        )}
+      </LinearGradient>
+    </AnimatedPressable>
+  );
+}
 
   if (variant === 'light') {
     return (
-      <Pressable
+      <AnimatedPressable
         onPress={onPress}
+        onPressIn={onPressIn}
+        onPressOut={onPressOut}
         disabled={disabled || loading}
-        style={({ pressed }) => [
-          styles.lightButton,
-          style,
-          (pressed || disabled) && { opacity: 0.85 },
-        ]}>
+        style={[styles.lightButton, style, animatedStyle]}>
         {loading ? (
           <ActivityIndicator color="#333" />
         ) : (
           <Text style={styles.lightButtonText}>{title}</Text>
         )}
-      </Pressable>
+      </AnimatedPressable>
     );
   }
 
   return (
-    <Pressable
+    <AnimatedPressable
       onPress={onPress}
+      onPressIn={onPressIn}
+      onPressOut={onPressOut}
       disabled={disabled || loading}
       style={[
         styles.ghost,
@@ -88,6 +122,7 @@ export function AppButton({
           backgroundColor: p.card,
         },
         style,
+        animatedStyle,
       ]}>
       {loading ? (
         <ActivityIndicator color={p.primary} />
@@ -100,12 +135,13 @@ export function AppButton({
           {title}
         </Text>
       )}
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: { borderRadius: 16, overflow: 'hidden' },
+  disabled: { opacity: 0.5 },
   gradient: {
     paddingVertical: 18,
     alignItems: 'center',

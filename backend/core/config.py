@@ -28,6 +28,10 @@ class Settings:
         self.smtp_port: int = int(os.getenv("SMTP_PORT", "587"))
         self.smtp_email: str = os.getenv("SMTP_EMAIL", "")
         self.smtp_app_password: str = os.getenv("SMTP_APP_PASSWORD", "")
+        self.google_web_client_id: str = os.getenv("GOOGLE_WEB_CLIENT_ID", "")
+        self.google_web_client_secret: str = os.getenv("GOOGLE_WEB_CLIENT_SECRET", "")
+        self.google_ios_client_id: str = os.getenv("GOOGLE_IOS_CLIENT_ID", "")
+        self.google_android_client_id: str = os.getenv("GOOGLE_ANDROID_CLIENT_ID", "")
         self.app_env: str = os.getenv("APP_ENV", "development")
         self.cors_origins: list[str] = [
             o.strip()

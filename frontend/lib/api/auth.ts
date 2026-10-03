@@ -22,10 +22,14 @@ export async function sendEmailCode(
   return data;
 }
 
-export async function verifyRegistrationCode(email: string, code: string) {
+export async function verifyRegistrationCode(
+  email: string,
+  code: string,
+  purpose: 'register' | 'reset' = 'register',
+) {
   const { data } = await apiClient.post<{ status: 'success' }>(
     '/api/verify-code',
-    { email, code },
+    { email, code, purpose },
   );
   return data;
 }
@@ -57,6 +61,13 @@ export async function loginWithPassword(email: string, password: string) {
   const { data } = await apiClient.post<TokenResponse>('/auth/login', {
     email,
     password,
+  });
+  return data;
+}
+
+export async function loginWithGoogle(idToken: string) {
+  const { data } = await apiClient.post<TokenResponse>('/auth/google', {
+    id_token: idToken,
   });
   return data;
 }

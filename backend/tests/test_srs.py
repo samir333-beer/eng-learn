@@ -8,8 +8,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from db.base import Base
-from models.srs_card import SRSCard
-from models.user import User
+from models import (  # noqa: F401 — регистрирует все модели в Base.metadata
+    EmailCode,
+    SRSCard,
+    User,
+    UserProgress,
+)
 from services.srs_service import (
     get_review_session,
     get_srs_stats,
@@ -54,6 +58,15 @@ def test_review_session_returns_new_cards():
     session = get_review_session(db, user.id, limit=10)
     assert session.total > 0
     assert all(item.is_new for item in session.items)
+    db.close()
+
+
+def test_review_session_respects_limit():
+    db = TestingSession()
+    user = _make_user(db, email="test-limit@test.com", username="tester-limit")
+    session = get_review_session(db, user.id, limit=3)
+    assert session.total == 3
+    assert len(session.items) == 3
     db.close()
 
 

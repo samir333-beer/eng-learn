@@ -1,0 +1,17 @@
+# AI-ассистенты и вспомогательные артефакты
+.aider*
+.kilo/
+.koda/
+repomix-output.xml
+_fix_*.js
+continue-config*.yaml
+
+# Распакованные копии-снимки проектов
+*_extracted/
+
+# Логи локального запуска backend/frontend
+*.log
+
+.env
+.env.*
+!.env.example

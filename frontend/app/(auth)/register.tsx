@@ -1,238 +1,163 @@
-import { Link, useRouter } from 'expo-router';
-import { useState } from 'react';
-import { StyleSheet, Text, View, Pressable } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { StyleSheet } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withSpring,
+} from 'react-native-reanimated';
 
-import { AuthInput } from '@/components/auth/AuthInput';
+import { AuthBackdrop } from '@/components/auth/AuthBackdrop';
+import { AuthError } from '@/components/auth/AuthError';
+import { AuthField } from '@/components/auth/AuthField';
+import { AuthFooterLink } from '@/components/auth/AuthFooterLink';
+import { AuthHeader } from '@/components/auth/AuthHeader';
+import { AuthScreen } from '@/components/auth/AuthScreen';
+import { AuthSocial } from '@/components/auth/AuthSocial';
+import { AuthTopBar } from '@/components/auth/AuthTopBar';
 import { AppButton } from '@/components/ui/AppButton';
-import { Screen } from '@/components/ui/Screen';
-import { SocialIcon } from '@/components/ui/SocialIcon';
+import { FadeIn } from '@/components/ui/FadeIn';
+import { useAuth } from '@/context/AuthContext';
+import { useFormValidation, validators } from '@/hooks/useFormValidation';
 import { sendEmailCode } from '@/lib/api/auth';
 import { getApiError } from '@/lib/errors';
-import { useThemePalette } from '@/hooks/use-theme-palette';
 
-const socialProviders = [
-  {
-    id: 'google',
-    provider: 'google' as const,
-    label: 'Google',
-    bg: '#FFFFFF',
-    borderColor: '#E5E7EB',
-    borderWidth: 1.5,
-  },
-  {
-    id: 'apple',
-    provider: 'apple' as const,
-    label: 'Apple',
-    bg: '#FFFFFF',
-    iconColor: '#000000',
-    borderColor: '#E5E7EB',
-    borderWidth: 1.5,
-  },
-];
+/** Задержки стаггер-появления блоков экрана (мс). */
+const DELAY = {
+  topBar: 0,
+  form: 160,
+  cta: 240,
+  social: 320,
+} as const;
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const p = useThemePalette();
+  const { signInWithGoogle } = useAuth();
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  // Кнопка всегда активна: валидация — по нажатию, ошибка под полем.
+  const { errors, validate, clearError, setError: setFieldError } =
+    useFormValidation({
+      email: validators.email,
+    });
+
+  // Разовое пружинное появление кнопки без бесконечной пульсации:
+  // постоянный scale на градиентной кнопке давал фоновую нагрузку GPU.
+  const ctaScale = useSharedValue(0.9);
+
+  useEffect(() => {
+    ctaScale.value = withDelay(
+      DELAY.cta,
+      withSpring(1, { damping: 14, stiffness: 180 }),
+    );
+  }, [ctaScale]);
+
+  const ctaStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: ctaScale.value }],
+  }));
+
+  const handleGoogleSuccess = async (idToken: string) => {
+    setError('');
+    setGoogleLoading(true);
+    try {
+      await signInWithGoogle(idToken);
+    } catch (e) {
+      setError(getApiError(e, 'Ошибка входа через Google'));
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   const onSendCode = async () => {
     setError('');
-    if (!email.trim()) {
-      setError('Введите email');
-      return;
-    }
+    if (!validate({ email })) return;
+    const normalizedEmail = email.trim();
     setLoading(true);
     try {
-      await sendEmailCode(email.trim(), 'register');
-      // Push the next step onto the navigation stack so that
-      // the system back gesture / UI back button can return here.
-      router.push(`./register-code?email=${encodeURIComponent(email.trim())}`);
+      await sendEmailCode(normalizedEmail, 'register');
+      // Push (а не replace): системная кнопка «назад» вернёт на этот экран.
+      router.push(`./register-code?email=${encodeURIComponent(normalizedEmail)}`);
     } catch (e) {
-      setError(getApiError(e, 'Не удалось отправить код'));
+      setFieldError('email', getApiError(e, 'Не удалось отправить код'));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Screen scroll glow={false} style={styles.container}>
-      <Pressable 
-        onPress={() => router.back()}
-        style={styles.backButton}
-        hitSlop={12}
-      >
-        <Ionicons name="chevron-back" size={28} color={p.text} />
-      </Pressable>
+    <AuthScreen
+      backdrop={<AuthBackdrop />}
+      top={
+        <FadeIn delay={DELAY.topBar}>
+          <AuthTopBar onBack={() => router.back()} step={1} totalSteps={3} />
+        </FadeIn>
+      }>
+      <FadeIn>
+        <AuthHeader
+          icon="mail-outline"
+          title="Создай аккаунт"
+          subtitle="Введите email — отправим код подтверждения"
+        />
+      </FadeIn>
 
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: p.text }]}>Начать обучение</Text>
-        <Text style={[styles.subtitle, { color: p.textMuted }]}>
-          Зарегистрируйтесь и начните учить английский
-        </Text>
-      </View>
+      <FadeIn delay={DELAY.form}>
+        <AuthField
+          label="Email"
+          icon="mail-outline"
+          placeholder="you@example.com"
+          value={email}
+          onChangeText={(v) => {
+            setEmail(v);
+            clearError('email');
+            if (error) setError('');
+          }}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="email"
+          textContentType="emailAddress"
+          returnKeyType="done"
+          onSubmitEditing={onSendCode}
+          error={errors.email || undefined}
+          containerStyle={styles.field}
+        />
 
-      <View style={styles.form}>
-        <View style={styles.inputWrapper}>
-          <Ionicons 
-            name="mail-outline" 
-            size={20} 
-            color={p.textMuted} 
-            style={styles.inputIcon} 
+        {error ? <AuthError message={error} /> : null}
+      </FadeIn>
+
+      <FadeIn delay={DELAY.cta}>
+        <Animated.View style={[styles.cta, ctaStyle]}>
+          <AppButton
+            title={loading ? 'Отправка кода…' : 'Продолжить'}
+            onPress={onSendCode}
+            loading={loading}
           />
-          <AuthInput
-            placeholder="Email адрес"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoComplete="email"
-            style={styles.inputWithIcon}
-          />
-        </View>
-      </View>
+        </Animated.View>
+      </FadeIn>
 
-      {error ? <Text style={[styles.error, { color: p.danger }]}>{error}</Text> : null}
+      <FadeIn delay={DELAY.social}>
+        <AuthSocial
+          onSuccess={handleGoogleSuccess}
+          loading={googleLoading}
+          dividerText="или зарегистрируйтесь через"
+        />
 
-      <AppButton
-        title={loading ? 'Отправка кода…' : 'Отправить код'}
-        onPress={onSendCode}
-        loading={loading}
-        style={styles.mainButton}
-      />
-
-      <View style={styles.dividerContainer}>
-        <View style={[styles.dividerLine, { backgroundColor: p.border }]} />
-        <Text style={[styles.dividerText, { color: p.textMuted }]}>
-          или зарегистрируйтесь через
-        </Text>
-        <View style={[styles.dividerLine, { backgroundColor: p.border }]} />
-      </View>
-
-      <View style={styles.socialButtons}>
-        {socialProviders.map((item) => (
-          <Pressable
-            key={item.id}
-            style={({ pressed }) => [
-              styles.socialButton,
-              {
-                backgroundColor: item.bg,
-                borderColor: item.borderColor,
-                borderWidth: item.borderWidth,
-              },
-              pressed && { opacity: 0.8 },
-            ]}
-            onPress={() => {}}>
-            <SocialIcon provider={item.provider} size={24} color={item.iconColor ?? '#000000'} />
-          </Pressable>
-        ))}
-      </View>
-
-      <View style={styles.footer}>
-        <Text style={[styles.footerText, { color: p.textMuted }]}>
-          Уже есть аккаунт?{' '}
-        </Text>
-        <Link href="/(auth)/login" style={styles.link}>
-          Войти
-        </Link>
-      </View>
-    </Screen>
+        <AuthFooterLink text="Уже есть аккаунт?" linkText="Войти" href="/(auth)/login" />
+      </FadeIn>
+    </AuthScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    paddingTop: 40,
-  },
-  backButton: {
-    marginBottom: 20,
-    alignSelf: 'flex-start',
-    minWidth: 48,
-    minHeight: 48,
-    padding: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 10,
-  },
-  header: {
-    marginBottom: 32,
-  },
-  title: {
-    fontSize: 36,
-    fontWeight: '700',
-    marginBottom: 8,
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    fontSize: 16,
-    lineHeight: 24,
-  },
-  form: {
-    gap: 20,
+  field: {
     marginBottom: 16,
   },
-  inputWrapper: {
-    position: 'relative',
-    justifyContent: 'center',
-  },
-  inputIcon: {
-    position: 'absolute',
-    left: 16,
-    zIndex: 1,
-  },
-  inputWithIcon: {
-    paddingLeft: 48,
-  },
-  error: {
-    textAlign: 'center',
-    marginBottom: 16,
-    lineHeight: 20,
-    fontSize: 14,
-  },
-  mainButton: {
-    marginBottom: 24,
-  },
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 24,
-    marginTop: 12,
-    gap: 12,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-  },
-  dividerText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  socialButtons: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 16,
-    marginBottom: 32,
-  },
-  socialButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  footerText: {
-    fontSize: 15,
-  },
-  link: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#7C7A9A',
+  cta: {
+    marginBottom: 28,
   },
 });
+

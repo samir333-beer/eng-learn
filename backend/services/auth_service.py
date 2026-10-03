@@ -1,6 +1,9 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
+from google.auth.exceptions import GoogleAuthError
+from google.auth.transport.requests import Request
+from google.oauth2 import id_token
 from sqlalchemy.orm import Session
 
 from core.codes import generate_code, hash_code, verify_code
@@ -72,8 +75,86 @@ def authenticate_email_password(
     db: Session, email: str, password: str
 ) -> User | None:
     user = get_user_by_email(db, email)
-    if not user or not verify_password(password, user.hashed_password):
+    if not user:
         return None
+    if not user.hashed_password:
+        raise ValueError("Этот аккаунт использует вход через Google")
+    if not verify_password(password, user.hashed_password):
+        return None
+    return user
+
+
+def _unique_username(db: Session, base: str) -> str:
+    """Возвращает username, гарантированно не занятый в БД."""
+    candidate = base.strip().lower() or "user"
+    if not get_user_by_username(db, candidate):
+        return candidate
+    suffix = 1
+    while True:
+        attempt = f"{candidate}{suffix}"
+        if not get_user_by_username(db, attempt):
+            return attempt
+        suffix += 1
+
+
+def authenticate_google(db: Session, id_token_str: str) -> User:
+    """Проверяет Google ID Token и возвращает (или создаёт) пользователя.
+
+    - Токен должен быть выпущен для одного из допустимых client_id
+      (Web/iOS/Android).
+    - Если пользователь с такой почтой уже есть — привязываем google_id.
+    - Иначе создаём нового пользователя без пароля.
+
+    Выбрасывает ValueError с понятным сообщением, если токен недействителен.
+    """
+    settings = get_settings()
+    audiences = [
+        cid
+        for cid in (
+            settings.google_web_client_id,
+            settings.google_ios_client_id,
+            settings.google_android_client_id,
+        )
+        if cid
+    ]
+    if not audiences:
+        raise ValueError("Google OAuth не настроен (нет client_id в конфиге)")
+
+    try:
+        payload = id_token.verify_oauth2_token(
+            id_token_str, Request(), audience=audiences
+        )
+    except (ValueError, GoogleAuthError) as exc:
+        raise ValueError("Недействительный токен Google") from exc
+
+    email = payload.get("email")
+    if not email:
+        raise ValueError("В токене Google отсутствует email")
+
+    google_id = payload.get("sub")
+    if not google_id:
+        raise ValueError("В токене Google отсутствует идентификатор пользователя")
+
+    name = payload.get("name") or email.split("@")[0]
+
+    user = get_user_by_email(db, email)
+    if user:
+        if not user.google_id:
+            user.google_id = google_id
+            db.commit()
+            db.refresh(user)
+        return user
+
+    user = User(
+        email=normalize_email(email),
+        username=_unique_username(db, name),
+        hashed_password=None,
+        google_id=google_id,
+        last_active_at=datetime.now(timezone.utc),
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
     return user
 
 

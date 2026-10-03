@@ -12,6 +12,7 @@ from schemas.auth import (
     EmailPasswordLogin,
     EmailRegisterRequest,
     ForgotPasswordRequest,
+    GoogleAuthRequest,
     MessageResponse,
     ResetPasswordRequest,
     SendCodeRequest,
@@ -22,6 +23,7 @@ from schemas.auth import (
 )
 from services.auth_service import (
     authenticate_email_password,
+    authenticate_google,
     check_code_with_attempts,
     create_user_with_email,
     get_user_by_email,
@@ -148,11 +150,33 @@ def login_with_code(
 def login_password(
     request: Request, data: EmailPasswordLogin, db: Session = Depends(get_db)
 ):
-    user = authenticate_email_password(db, data.email, data.password)
+    try:
+        user = authenticate_email_password(db, data.email, data.password)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Неверная почта или пароль",
+        )
+    touch_user_active(db, user)
+    return TokenResponse(access_token=create_access_token(str(user.id)))
+
+
+@router.post("/google", response_model=TokenResponse)
+@limiter.limit("10/minute")
+def login_google(
+    request: Request, data: GoogleAuthRequest, db: Session = Depends(get_db)
+):
+    try:
+        user = authenticate_google(db, data.id_token)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(exc),
         )
     touch_user_active(db, user)
     return TokenResponse(access_token=create_access_token(str(user.id)))
@@ -177,7 +201,7 @@ def verify_code_instant(
     - HTTP 400 — код неверный/истёк/не найден.
     - HTTP 429 — превышен лимит неверных попыток (5 на email).
     """
-    result = check_code_with_attempts(db, data.email, data.code, purpose="register")
+    result = check_code_with_attempts(db, data.email, data.code, purpose=data.purpose)
     if not result.ok:
         raise HTTPException(status_code=result.http_status, detail=result.message)
     return VerifyCodeResponse(status="success")

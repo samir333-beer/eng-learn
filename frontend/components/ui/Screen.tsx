@@ -1,5 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -7,6 +7,7 @@ import {
   StyleSheet,
   View,
   type RefreshControlProps,
+  type ScrollViewProps,
   type ViewProps,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,7 +18,13 @@ type Props = ViewProps & {
   scroll?: boolean;
   padded?: boolean;
   glow?: boolean;
+  /** Декоративный фон на весь экран (рисуется под контентом, не скроллится). */
+  backdrop?: ReactNode;
   refreshControl?: ReactElement<RefreshControlProps>;
+  /** Поведение ScrollView при тапах вне полей при открытой клавиатуре. */
+  keyboardShouldPersistTaps?: ScrollViewProps['keyboardShouldPersistTaps'];
+  /** Как скролл закрывает клавиатуру (по умолчанию — никак). */
+  keyboardDismissMode?: ScrollViewProps['keyboardDismissMode'];
 };
 
 export function Screen({
@@ -25,8 +32,11 @@ export function Screen({
   scroll,
   padded = true,
   glow = true,
+  backdrop,
   style,
   refreshControl,
+  keyboardShouldPersistTaps,
+  keyboardDismissMode,
   ...rest
 }: Props) {
   const p = useThemePalette();
@@ -46,7 +56,8 @@ export function Screen({
 
   return (
     <View style={[styles.root, { backgroundColor: p.bg }]}>
-      {glow && (
+      {backdrop}
+      {glow && !backdrop && (
         <LinearGradient
           colors={[`${p.primary}22`, 'transparent']}
           style={styles.glow}
@@ -59,7 +70,9 @@ export function Screen({
           <ScrollView
             showsVerticalScrollIndicator={false}
             refreshControl={refreshControl}
-            contentContainerStyle={styles.flexGrow}>
+            contentContainerStyle={styles.flexGrow}
+            keyboardShouldPersistTaps={keyboardShouldPersistTaps ?? 'always'}
+            keyboardDismissMode={keyboardDismissMode ?? 'none'}>
             {content}
           </ScrollView>
         ) : (

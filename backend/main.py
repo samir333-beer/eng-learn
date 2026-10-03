@@ -1,4 +1,5 @@
 import uvicorn
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
@@ -10,7 +11,14 @@ from api.routes.auth import limiter, verify_router
 from core.config import get_settings
 from db.init_db import init_database
 
-app = FastAPI(title="English Learning API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_database()
+    yield
+
+
+app = FastAPI(title="English Learning API", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
@@ -31,14 +39,6 @@ app.include_router(progress.router)
 app.include_router(leaderboard.router)
 app.include_router(quiz.router)
 app.include_router(srs.router)
-
-
-@app.on_event("startup")
-def on_startup():
-    init_database()
-
-
-init_database()
 
 
 @app.get("/health")
