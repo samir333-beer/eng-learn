@@ -1,0 +1,21 @@
+# Секреты и локальные файлы не должны попадать в образ
+.env
+.env.*
+!.env.example
+*.db
+*.sqlite3
+
+# Виртуальное окружение и кэш Python
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Артефакты разработки
+*.log
+*.zip
+tests/
