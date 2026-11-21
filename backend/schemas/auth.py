@@ -64,5 +64,18 @@ class UserResponse(BaseModel):
         from_attributes = True
 
 
+class AuthResponse(BaseModel):
+    """Ответ эндпоинтов входа/регистрации.
+
+    Возвращает токен и профиль пользователя одним ответом: раньше фронтенд
+    после логина делал второй запрос /auth/me, то есть каждый вход стоил
+    двух сетевых кругов вместо одного.
+    """
+
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
+
+
 class MessageResponse(BaseModel):
     message: str

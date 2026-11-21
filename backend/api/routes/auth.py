@@ -8,6 +8,7 @@ from core.security import create_access_token
 from db.session import get_db
 from models.user import User
 from schemas.auth import (
+    AuthResponse,
     EmailLoginCodeRequest,
     EmailPasswordLogin,
     EmailRegisterRequest,
@@ -102,7 +103,7 @@ def reset_password_endpoint(
     return MessageResponse(message="Пароль изменён")
 
 
-@router.post("/email/register", response_model=TokenResponse)
+@router.post("/email/register", response_model=AuthResponse)
 @limiter.limit("10/minute")
 def register_email(
     request: Request, data: EmailRegisterRequest, db: Session = Depends(get_db)
@@ -126,10 +127,12 @@ def register_email(
         db, data.email, data.username, data.password
     )
     token = create_access_token(str(user.id))
-    return TokenResponse(access_token=token)
+    return AuthResponse(
+        access_token=token, user=UserResponse.model_validate(user)
+    )
 
 
-@router.post("/email/login-code", response_model=TokenResponse)
+@router.post("/email/login-code", response_model=AuthResponse)
 @limiter.limit("15/minute")
 def login_with_code(
     request: Request, data: EmailLoginCodeRequest, db: Session = Depends(get_db)
@@ -142,10 +145,13 @@ def login_with_code(
             status_code=400, detail="Неверный или просроченный код"
         )
     touch_user_active(db, user)
-    return TokenResponse(access_token=create_access_token(str(user.id)))
+    return AuthResponse(
+        access_token=create_access_token(str(user.id)),
+        user=UserResponse.model_validate(user),
+    )
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=AuthResponse)
 @limiter.limit("20/minute")
 def login_password(
     request: Request, data: EmailPasswordLogin, db: Session = Depends(get_db)
@@ -163,10 +169,13 @@ def login_password(
             detail="Неверная почта или пароль",
         )
     touch_user_active(db, user)
-    return TokenResponse(access_token=create_access_token(str(user.id)))
+    return AuthResponse(
+        access_token=create_access_token(str(user.id)),
+        user=UserResponse.model_validate(user),
+    )
 
 
-@router.post("/google", response_model=TokenResponse)
+@router.post("/google", response_model=AuthResponse)
 @limiter.limit("10/minute")
 def login_google(
     request: Request, data: GoogleAuthRequest, db: Session = Depends(get_db)
@@ -179,7 +188,10 @@ def login_google(
             detail=str(exc),
         )
     touch_user_active(db, user)
-    return TokenResponse(access_token=create_access_token(str(user.id)))
+    return AuthResponse(
+        access_token=create_access_token(str(user.id)),
+        user=UserResponse.model_validate(user),
+    )
 
 
 @router.get("/me", response_model=UserResponse)

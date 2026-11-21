@@ -16,6 +16,7 @@ import {
   loginWithPassword,
   registerWithEmail,
   type User,
+  type AuthResponse,
 } from '@/lib/api/auth';
 import { setAuthToken } from '@/lib/api/client';
 import { clearToken, loadToken, saveToken } from '@/lib/storage/token';
@@ -63,6 +64,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // Вход/регистрация: эндпоинты уже возвращают профиль в том же ответе,
+  // поэтому второй запрос /auth/me не нужен — экономим целый сетевой круг.
+  const applyAuth = useCallback(async (auth: AuthResponse) => {
+    setAuthToken(auth.access_token);
+    await saveToken(auth.access_token);
+    setUser(auth.user);
+    setSessionError(false);
+  }, []);
+
   useEffect(() => {
     (async () => {
       try {
@@ -95,18 +105,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInPassword = useCallback(
     async (email: string, password: string) => {
-      const { access_token } = await loginWithPassword(email, password);
-      await applyToken(access_token);
+      await applyAuth(await loginWithPassword(email, password));
     },
-    [applyToken],
+    [applyAuth],
   );
 
   const signInCode = useCallback(
     async (email: string, code: string) => {
-      const { access_token } = await loginWithEmailCode(email, code);
-      await applyToken(access_token);
+      await applyAuth(await loginWithEmailCode(email, code));
     },
-    [applyToken],
+    [applyAuth],
   );
 
   const signUp = useCallback(
@@ -116,23 +124,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       username: string,
       password: string,
     ) => {
-      const { access_token } = await registerWithEmail(
-        email,
-        code,
-        username,
-        password,
+      await applyAuth(
+        await registerWithEmail(email, code, username, password),
       );
-      await applyToken(access_token);
     },
-    [applyToken],
+    [applyAuth],
   );
 
   const signInWithGoogle = useCallback(
     async (idToken: string) => {
-      const { access_token } = await loginWithGoogle(idToken);
-      await applyToken(access_token);
+      await applyAuth(await loginWithGoogle(idToken));
     },
-    [applyToken],
+    [applyAuth],
   );
 
   const signOut = useCallback(async () => {

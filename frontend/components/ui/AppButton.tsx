@@ -6,6 +6,9 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  View,
+  type StyleProp,
+  type TextStyle,
   type ViewStyle,
 } from 'react-native';
 import Animated, {
@@ -17,6 +20,33 @@ import Animated, {
 import { useThemePalette } from '@/hooks/use-theme-palette';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+/** Содержимое кнопки: в покое — текст, при загрузке — спиннер + текст.
+ *  Текст остаётся видимым, поэтому «Отправка кода…» действительно читается
+ *  пользователем, а не подменяется немым индикатором. */
+function ButtonContent({
+  loading,
+  title,
+  color,
+  textStyle,
+}: {
+  loading?: boolean;
+  title: string;
+  color: string;
+  textStyle: StyleProp<TextStyle>;
+}) {
+  if (!loading) {
+    return <Text style={textStyle}>{title}</Text>;
+  }
+  return (
+    <View style={styles.loadingRow}>
+      <ActivityIndicator size="small" color={color} />
+      <Text style={textStyle} numberOfLines={1}>
+        {title}
+      </Text>
+    </View>
+  );
+}
 
 /** Пружинные параметры нажатия: быстрый отклик, мягкое возвращение. */
 const PRESS_SPRING = { damping: 18, stiffness: 320, mass: 0.6 } as const;
@@ -82,11 +112,12 @@ export function AppButton({
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={[styles.gradient, { borderRadius: buttonRadius }]}>
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.primaryText}>{title}</Text>
-        )}
+        <ButtonContent
+          loading={loading}
+          title={title}
+          color="#fff"
+          textStyle={styles.primaryText}
+        />
       </LinearGradient>
     </AnimatedPressable>
   );
@@ -100,11 +131,12 @@ export function AppButton({
         onPressOut={onPressOut}
         disabled={disabled || loading}
         style={[styles.lightButton, style, animatedStyle]}>
-        {loading ? (
-          <ActivityIndicator color="#333" />
-        ) : (
-          <Text style={styles.lightButtonText}>{title}</Text>
-        )}
+        <ButtonContent
+          loading={loading}
+          title={title}
+          color="#333"
+          textStyle={styles.lightButtonText}
+        />
       </AnimatedPressable>
     );
   }
@@ -124,17 +156,15 @@ export function AppButton({
         style,
         animatedStyle,
       ]}>
-      {loading ? (
-        <ActivityIndicator color={p.primary} />
-      ) : (
-        <Text
-          style={[
-            styles.ghostText,
-            { color: variant === 'danger' ? p.danger : p.text },
-          ]}>
-          {title}
-        </Text>
-      )}
+      <ButtonContent
+        loading={loading}
+        title={title}
+        color={p.primary}
+        textStyle={[
+          styles.ghostText,
+          { color: variant === 'danger' ? p.danger : p.text },
+        ]}
+      />
     </AnimatedPressable>
   );
 }
@@ -142,6 +172,12 @@ export function AppButton({
 const styles = StyleSheet.create({
   wrap: { borderRadius: 16, overflow: 'hidden' },
   disabled: { opacity: 0.5 },
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 8,
+  },
   gradient: {
     paddingVertical: 18,
     alignItems: 'center',

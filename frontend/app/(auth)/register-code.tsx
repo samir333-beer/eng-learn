@@ -1,6 +1,6 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BackHandler, StyleSheet, Text, View } from 'react-native';
+import { BackHandler, Keyboard, StyleSheet, Text, View } from 'react-native';
 
 import { AuthBackdrop } from '@/components/auth/AuthBackdrop';
 import { AuthError } from '@/components/auth/AuthError';
@@ -74,7 +74,10 @@ export default function RegisterCodeScreen() {
   // Старое подтверждение кода не должно «протечь» на следующий заход
   // (возможно, с другим email) — очищаем память; экран шага 1 монтирует
   // шаг 2 заново, поэтому ячейки пустые и таймер стартует заново.
+  const cancelPush = useRef<() => void>(() => {});
+
   const handleBack = useCallback(() => {
+    cancelPush.current();
     clearPendingRegistration();
     if (router.canGoBack()) {
       router.back();
@@ -97,11 +100,30 @@ export default function RegisterCodeScreen() {
   // Автопереход — ровно один раз, сразу после успешной проверки 6-й цифры.
   // При возврате с шага 3 verified не меняется, поэтому эффект не
   // перезапускается и пользователь спокойно остаётся на шаге 2.
+  //
+  // Переход разнесён на два кадра намеренно. Раньше push вызывался в том же
+  // коммите, что и setStatus('valid'): на слабых Android одновременный пик
+  // нагрузки (перерисовка 6 ячеек + монтирование нового экрана с градиентами
+  // и FadeIn + slide-анимация + скрытие клавиатуры) давал заметный рывок.
+  // Теперь сначала отрисовываются зелёные ячейки, клавиатура гасится, и лишь
+  // затем монтируется следующий экран.
   const navigatedRef = useRef(false);
+  const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearPushTimer = useCallback(() => {
+    if (pushTimer.current) {
+      clearTimeout(pushTimer.current);
+      pushTimer.current = null;
+    }
+  }, []);
+
+  cancelPush.current = clearPushTimer;
+
   useEffect(() => {
     if (!verified) {
       // Код сброшен (resend/«Ввести код заново») — разрешаем автопереход снова.
       navigatedRef.current = false;
+      clearPushTimer();
       setAdvancing(false);
       return;
     }
@@ -110,8 +132,20 @@ export default function RegisterCodeScreen() {
     if (!pending) return;
     navigatedRef.current = true;
     setAdvancing(true);
-    router.push(`./register-details?email=${encodeURIComponent(pending.email)}`);
-  }, [verified, router]);
+
+    // Цифровая клавиатура на следующем экране не нужна: гасим её здесь,
+    // иначе на Android она схлопывается уже поверх нового экрана — лишний
+    // layout-проход ровно в момент анимации перехода.
+    Keyboard.dismiss();
+
+    pushTimer.current = setTimeout(() => {
+      pushTimer.current = null;
+      router.push(`./register-details?email=${encodeURIComponent(pending.email)}`);
+    }, 220);
+  }, [verified, router, clearPushTimer]);
+
+  // Экран ушёл (или размонтирован) — не оставляем висящий таймер.
+  useEffect(() => clearPushTimer, [clearPushTimer]);
 
   // Возврат на экран (в т.ч. с шага 3): автоперехода сейчас нет — снимаем
   // подсказку «переходим дальше…», остаются зелёные ячейки и кнопка
@@ -138,6 +172,7 @@ export default function RegisterCodeScreen() {
       setError('Сначала введите код из письма');
       return;
     }
+    Keyboard.dismiss();
     router.push(`./register-details?email=${encodeURIComponent(pending.email)}`);
   };
 

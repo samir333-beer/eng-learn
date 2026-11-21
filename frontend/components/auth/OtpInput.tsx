@@ -91,7 +91,9 @@ export function OtpInput({
 
   return (
     <Pressable onPress={focusInput} style={styles.wrap}>
-      <View style={styles.row}>
+      {/* Ячейки — чисто визуальные: цифры и «Введено N из 6» озвучивает
+          скрытый TextInput, иначе скринридер читал бы шесть пустых блоков. */}
+      <View style={styles.row} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         {Array.from({ length }, (_, i) => (
           <OtpCell
             key={i}
@@ -102,7 +104,9 @@ export function OtpInput({
         ))}
       </View>
 
-      {/* Скрытый ввод: невидим, но получает фокус, вставку и SMS-автозаполнение */}
+      {/* Скрытый ввод: невидим, но получает фокус, вставку и SMS-автозаполнение.
+          accessibilityLabel/Hint нужны, чтобы TalkBack и VoiceOver не читали
+          безымянное поле: сами ячейки — декоративные (скрыты от скринридера). */}
       <TextInput
         ref={inputRef}
         value={value}
@@ -114,6 +118,9 @@ export function OtpInput({
         editable={editable}
         caretHidden
         autoFocus
+        accessibilityLabel="Код подтверждения"
+        accessibilityHint={`Введите ${length} цифр из письма`}
+        accessibilityValue={{ text: `Введено ${digits.length} из ${length}` }}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         selectionColor={p.primary}

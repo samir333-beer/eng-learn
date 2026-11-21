@@ -11,6 +11,12 @@ export type TokenResponse = {
   token_type: string;
 };
 
+export type AuthResponse = {
+  access_token: string;
+  token_type: string;
+  user: User;
+};
+
 export async function sendEmailCode(
   email: string,
   purpose: 'register' | 'login' | 'reset',
@@ -40,7 +46,7 @@ export async function registerWithEmail(
   username: string,
   password: string,
 ) {
-  const { data } = await apiClient.post<TokenResponse>('/auth/email/register', {
+  const { data } = await apiClient.post<AuthResponse>('/auth/email/register', {
     email,
     code,
     username,
@@ -50,7 +56,7 @@ export async function registerWithEmail(
 }
 
 export async function loginWithEmailCode(email: string, code: string) {
-  const { data } = await apiClient.post<TokenResponse>('/auth/email/login-code', {
+  const { data } = await apiClient.post<AuthResponse>('/auth/email/login-code', {
     email,
     code,
   });
@@ -58,7 +64,7 @@ export async function loginWithEmailCode(email: string, code: string) {
 }
 
 export async function loginWithPassword(email: string, password: string) {
-  const { data } = await apiClient.post<TokenResponse>('/auth/login', {
+  const { data } = await apiClient.post<AuthResponse>('/auth/login', {
     email,
     password,
   });
@@ -66,7 +72,7 @@ export async function loginWithPassword(email: string, password: string) {
 }
 
 export async function loginWithGoogle(idToken: string) {
-  const { data } = await apiClient.post<TokenResponse>('/auth/google', {
+  const { data } = await apiClient.post<AuthResponse>('/auth/google', {
     id_token: idToken,
   });
   return data;

@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { StyleSheet } from 'react-native';
+import { Keyboard, StyleSheet } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -79,6 +79,9 @@ export default function RegisterScreen() {
     setLoading(true);
     try {
       await sendEmailCode(normalizedEmail, 'register');
+      // Клавиатура email-раскладки на экране кода бесполезна: гасим её перед
+      // сменой экрана. OtpInput сам поднимет цифровую клавиатуру (autoFocus).
+      Keyboard.dismiss();
       // Push (а не replace): системная кнопка «назад» вернёт на этот экран.
       router.push(`./register-code?email=${encodeURIComponent(normalizedEmail)}`);
     } catch (e) {

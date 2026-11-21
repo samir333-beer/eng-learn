@@ -96,7 +96,8 @@ export default function ResetPasswordScreen() {
               autoCorrect={false}
               autoComplete="email"
               textContentType="emailAddress"
-              editable={!sendingCode}
+              returnKeyType="done"
+              onSubmitEditing={sendCode}
               error={emailError || undefined}
             />
           ) : (
