@@ -1,0 +1,29 @@
+# Контекст сборки — весь репозиторий, но фронтенд и локальные файлы
+# в образ не нужны: это мобильное приложение, оно живёт на телефоне.
+frontend/
+.git/
+.gitignore
+
+# Секреты и локальные данные
+.env
+.env.*
+backend/.env
+backend/.env.*
+!.env.example
+*.db
+*.sqlite3
+
+# Python
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Артефакты разработки
+*.log
+*.zip
+backend/tests/

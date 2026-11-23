@@ -1,0 +1,16 @@
+# Конфигурация деплоя на Amvera Cloud.
+# Документация: https://amvera.ru/doc_docker
+meta:
+  environment: docker
+  toolchain:
+    name: docker
+
+build:
+  dockerfile: Dockerfile
+
+run:
+  # Приложение слушает 8000 (см. CMD в Dockerfile).
+  containerPort: 8000
+  # Постоянный диск: сюда монтируется хранилище, поэтому DATABASE_URL
+  # указывает на /data/english_app.db и база не теряется при пересборке.
+  persistenceMount: /data
